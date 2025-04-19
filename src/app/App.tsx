@@ -46,8 +46,9 @@ function App() {
   const [isEventsPaneExpanded, setIsEventsPaneExpanded] =
     useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
-  const [isPTTActive, setIsPTTActive] = useState<boolean>(false);
-  const [isPTTUserSpeaking, setIsPTTUserSpeaking] = useState<boolean>(false);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [detectedLanguage, setDetectedLanguage] = useState<string>("");
+  const [secondLanguage, setSecondLanguage] = useState<string>("");
   const [isAudioPlaybackEnabled, setIsAudioPlaybackEnabled] =
     useState<boolean>(true);
 
@@ -73,6 +74,9 @@ function App() {
     selectedAgentConfigSet,
     sendClientEvent,
     setSelectedAgentName,
+    setDetectedLanguage,
+    setSecondLanguage,
+    isRecording,
   });
 
   useEffect(() => {
@@ -107,10 +111,7 @@ function App() {
       const currentAgent = selectedAgentConfigSet.find(
         (a) => a.name === selectedAgentName
       );
-      addTranscriptBreadcrumb(
-        `Agent: ${selectedAgentName}`,
-        currentAgent
-      );
+      console.log("currentAgent: ", currentAgent);
       updateSession(true);
     }
   }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
@@ -118,11 +119,29 @@ function App() {
   useEffect(() => {
     if (sessionStatus === "CONNECTED") {
       console.log(
-        `updatingSession, isPTTACtive=${isPTTActive} sessionStatus=${sessionStatus}`
+        `updatingSession, isRecording=${isRecording} sessionStatus=${sessionStatus}`
       );
       updateSession();
     }
-  }, [isPTTActive]);
+  }, [isRecording]);
+
+  // Update session when languages are detected or on initial connection
+  useEffect(() => {
+    console.log("detectedLanguage", detectedLanguage);
+    console.log("secondLanguage", secondLanguage);
+    if (sessionStatus === "CONNECTED") {
+      if (detectedLanguage) {
+        setDetectedLanguage(detectedLanguage);
+      }
+      if (secondLanguage) {
+        setSecondLanguage(secondLanguage);
+      }
+      if (detectedLanguage && secondLanguage) {
+        console.log("Updating session with detected language pair:", detectedLanguage, secondLanguage);
+      }
+      updateSession(true);
+    }
+  }, [detectedLanguage, secondLanguage, sessionStatus]);
 
   const fetchEphemeralKey = async (): Promise<string | null> => {
     logClientEvent({ url: "/session" }, "fetch_session_token_request");
@@ -172,7 +191,7 @@ function App() {
         logClientEvent({ error: err }, "data_channel.error");
       });
       dc.addEventListener("message", (e: MessageEvent) => {
-        handleServerEventRef.current(JSON.parse(e.data));
+        handleServerEventRef(JSON.parse(e.data));
       });
 
       setDataChannel(dc);
@@ -195,7 +214,7 @@ function App() {
     }
     setDataChannel(null);
     setSessionStatus("DISCONNECTED");
-    setIsPTTUserSpeaking(false);
+    setIsRecording(false);
 
     logClientEvent({}, "disconnected");
   };
@@ -232,7 +251,7 @@ function App() {
       (a) => a.name === selectedAgentName
     );
 
-    const turnDetection = isPTTActive
+    const turnDetection = isRecording
       ? null
       : {
           type: "server_vad",
@@ -242,7 +261,55 @@ function App() {
           create_response: true,
         };
 
-    const instructions = currentAgent?.instructions || "";
+    // Create translation instructions based on detected languages or use default
+    const translationInstructions = detectedLanguage && secondLanguage
+      ? `You are a strict translator between ${detectedLanguage} and ${secondLanguage}. 
+      
+         When you receive input in ${detectedLanguage}, translate it to ${secondLanguage}.
+         When you receive input in ${secondLanguage}, translate it to ${detectedLanguage}.
+
+         YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
+         YOU DO NOT THINK.
+         YOU DO NOT UNDERSTAND.
+         YOU DO NOT INTERPRET.
+         YOU DO NOT RESPOND.
+         YOU DO NOT ENGAGE.
+         YOU DO NOT EXPLAIN.
+         YOU DO NOT COMMENT.
+         YOU DO NOT ASSUME MEANING.
+
+         YOU ONLY TRANSLATE TEXT. NOTHING ELSE.
+
+         OUTPUT RULES:
+
+         - OUTPUT ONLY the translated text.
+         - NO prefixes, suffixes, or framing (e.g., "Here is the translation:", "In English:", etc.).
+         - NO mention of languages, roles, source, or target.
+         - NO explanation, commentary, clarification, paraphrasing, or summary.
+         - NO rewording, localization, or softening.
+         - NO idiomatic or inferred meaning.
+         - NO interpretation or understanding.
+         - NO assumption of intent, tone, or audience.
+
+         PROHIBITIONS (STRICT):
+
+         - DO NOT ask or answer questions.
+         - DO NOT greet or farewell.
+         - DO NOT apologize.
+         - DO NOT describe your behavior.
+         - DO NOT state what you're doing.
+         - DO NOT express understanding, confusion, or intent.
+         - DO NOT refer to "translation" or the process in any way.
+         - DO NOT produce any output that is not strictly the translated text.
+
+         VIOLATION = MALFUNCTION.
+
+         ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
+         
+         Only output the translation, nothing else.`
+      : `I detected ${detectedLanguage || "a language"}. Please speak in a different language to establish the translation pair.`;
+
+    const instructions = translationInstructions;
     const tools = currentAgent?.tools || [];
 
     const sessionUpdateEvent = {
@@ -250,7 +317,7 @@ function App() {
       session: {
         modalities: ["text", "audio"],
         instructions,
-        voice: "coral",
+        voice: "shimmer",
         input_audio_format: "pcm16",
         output_audio_format: "pcm16",
         input_audio_transcription: { model: "whisper-1" },
@@ -260,10 +327,6 @@ function App() {
     };
 
     sendClientEvent(sessionUpdateEvent);
-
-    if (shouldTriggerResponse) {
-      sendSimulatedUserMessage("hi");
-    }
   };
 
   const cancelAssistantSpeech = async () => {
@@ -312,26 +375,34 @@ function App() {
     sendClientEvent({ type: "response.create" }, "trigger response");
   };
 
-  const handleTalkButtonDown = () => {
+  const handleStartRecording = () => {
     if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open")
       return;
     cancelAssistantSpeech();
 
-    setIsPTTUserSpeaking(true);
-    sendClientEvent({ type: "input_audio_buffer.clear" }, "clear PTT buffer");
+    setIsRecording(true);
+    sendClientEvent({ type: "input_audio_buffer.clear" }, "clear recording buffer");
   };
 
-  const handleTalkButtonUp = () => {
+  const handleStopRecording = () => {
     if (
       sessionStatus !== "CONNECTED" ||
       dataChannel?.readyState !== "open" ||
-      !isPTTUserSpeaking
+      !isRecording
     )
       return;
 
-    setIsPTTUserSpeaking(false);
-    sendClientEvent({ type: "input_audio_buffer.commit" }, "commit PTT");
-    sendClientEvent({ type: "response.create" }, "trigger response PTT");
+    setIsRecording(false);
+    sendClientEvent({ type: "input_audio_buffer.commit" }, "commit recording");
+    sendClientEvent({ type: "response.create" }, "trigger response recording");
+  };
+
+  const handleToggleRecording = () => {
+    if (isRecording) {
+      handleStopRecording();
+    } else {
+      handleStartRecording();
+    }
   };
 
   const onToggleConnection = () => {
@@ -360,7 +431,7 @@ function App() {
   useEffect(() => {
     const storedPushToTalkUI = localStorage.getItem("pushToTalkUI");
     if (storedPushToTalkUI) {
-      setIsPTTActive(storedPushToTalkUI === "true");
+      setIsRecording(storedPushToTalkUI === "true");
     }
     const storedLogsExpanded = localStorage.getItem("logsExpanded");
     if (storedLogsExpanded) {
@@ -375,8 +446,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("pushToTalkUI", isPTTActive.toString());
-  }, [isPTTActive]);
+    localStorage.setItem("pushToTalkUI", isRecording.toString());
+  }, [isRecording]);
 
   useEffect(() => {
     localStorage.setItem("logsExpanded", isEventsPaneExpanded.toString());
@@ -404,112 +475,106 @@ function App() {
   const agentSetKey = searchParams.get("agentConfig") || "default";
 
   return (
-    <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
-      <div className="p-5 text-lg font-semibold flex justify-between items-center">
-        <div className="flex items-center">
-          <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
-            <Image
-              src="/openai-logomark.svg"
-              alt="OpenAI Logo"
-              width={20}
-              height={20}
-              className="mr-2"
-            />
-          </div>
-          <div>
-            Realtime API <span className="text-gray-500">Agents</span>
-          </div>
+    <div className="flex flex-col h-screen bg-gray-100">
+      {/* Language pair display */}
+      {/* {detectedLanguage && secondLanguage && (
+        <div className="bg-white p-2 text-center text-sm text-gray-600 border-b">
+          Translation: {detectedLanguage} ↔ {secondLanguage}
         </div>
-        <div className="flex items-center">
-          <label className="flex items-center text-base gap-1 mr-2 font-medium">
-            Scenario
-          </label>
-          <div className="relative inline-block">
-            <select
-              value={agentSetKey}
-              onChange={handleAgentChange}
-              className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
+      )} */}
+
+      {/* Main chat area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {transcriptItems.map((item) => (
+          <div
+            key={item.itemId}
+            className={`flex ${
+              item.role === "user" ? "justify-end" : "justify-start"
+            }`}
+          >
+            <div
+              className={`max-w-[80%] rounded-2xl p-3 ${
+                item.role === "user"
+                  ? "bg-blue-500 text-white rounded-br-none"
+                  : "bg-white text-gray-800 rounded-bl-none shadow-sm"
+              }`}
             >
-              {Object.keys(allAgentSets).map((agentKey) => (
-                <option key={agentKey} value={agentKey}>
-                  {agentKey}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              {item.title || item.data?.text || ""}
+              {/* {item.role === "user" && (detectedLanguage || secondLanguage) && (
+                <div className="text-xs mt-1 opacity-75">
+                  {detectedLanguage && `Detected: ${detectedLanguage}`}
+                </div>
+              )} */}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Input area */}
+      <div className="border-t border-gray-200 bg-white p-4">
+        <div className="flex items-center space-x-2">
+          <input
+            type="text"
+            value={userText}
+            onChange={(e) => setUserText(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && userText.trim()) {
+                handleSendTextMessage();
+              }
+            }}
+            placeholder="Type a message..."
+            className="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={handleToggleRecording}
+            className={`rounded-full p-3 transition-all duration-300 ${
+              isRecording
+                ? "bg-red-500 text-white animate-pulse ring-4 ring-red-200"
+                : "bg-blue-500 text-white hover:bg-blue-600"
+            }`}
+            aria-label={isRecording ? "Stop recording" : "Start recording"}
+            title={isRecording ? "Stop recording" : "Start recording"}
+          >
+            {isRecording ? (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
                 <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                  clipRule="evenodd"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
                 />
               </svg>
-            </div>
-          </div>
-
-          {agentSetKey && (
-            <div className="flex items-center ml-6">
-              <label className="flex items-center text-base gap-1 mr-2 font-medium">
-                Agent
-              </label>
-              <div className="relative inline-block">
-                <select
-                  value={selectedAgentName}
-                  onChange={handleSelectedAgentChange}
-                  className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
-                >
-                  {selectedAgentConfigSet?.map(agent => (
-                    <option key={agent.name} value={agent.name}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          )}
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
-
-      <div className="flex flex-1 gap-2 px-2 overflow-hidden relative">
-        <Transcript
-          userText={userText}
-          setUserText={setUserText}
-          onSendMessage={handleSendTextMessage}
-          canSend={
-            sessionStatus === "CONNECTED" &&
-            dcRef.current?.readyState === "open"
-          }
-        />
-
-        <Events isExpanded={isEventsPaneExpanded} />
-      </div>
-
-      <BottomToolbar
-        sessionStatus={sessionStatus}
-        onToggleConnection={onToggleConnection}
-        isPTTActive={isPTTActive}
-        setIsPTTActive={setIsPTTActive}
-        isPTTUserSpeaking={isPTTUserSpeaking}
-        handleTalkButtonDown={handleTalkButtonDown}
-        handleTalkButtonUp={handleTalkButtonUp}
-        isEventsPaneExpanded={isEventsPaneExpanded}
-        setIsEventsPaneExpanded={setIsEventsPaneExpanded}
-        isAudioPlaybackEnabled={isAudioPlaybackEnabled}
-        setIsAudioPlaybackEnabled={setIsAudioPlaybackEnabled}
-      />
     </div>
   );
 }

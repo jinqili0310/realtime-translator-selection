@@ -70,6 +70,7 @@ export interface ServerEvent {
   delta?: string;
   session?: {
     id?: string;
+    status?: SessionStatus;
   };
   item?: {
     id?: string;
@@ -83,6 +84,7 @@ export interface ServerEvent {
       type?: string;
       transcript?: string | null;
       text?: string;
+      language?: string;
     }[];
   };
   response?: {
