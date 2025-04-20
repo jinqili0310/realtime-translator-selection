@@ -63,6 +63,7 @@ function App() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const audioTrackRef = useRef<MediaStreamTrack | null>(null);
   const [sessionStatus, setSessionStatus] =
     useState<SessionStatus>("DISCONNECTED");
 
@@ -158,6 +159,7 @@ function App() {
     if (storedSourceLang && storedTargetLang) {
       setSelectedSourceLanguage(storedSourceLang);
       setSelectedTargetLanguage(storedTargetLang);
+      // Initialize detected languages with the stored preferences
       setDetectedLanguage(storedSourceLang);
       setSecondLanguage(storedTargetLang);
     } else {
@@ -171,22 +173,20 @@ function App() {
   
   // Handle language selection from modal
   const handleLanguageSelection = (sourceLang: string, targetLang: string) => {
+    // Update selected languages
     setSelectedSourceLanguage(sourceLang);
     setSelectedTargetLanguage(targetLang);
     
-    // Only overwrite detected languages if we haven't already detected any
-    // or if we're explicitly changing the language pair
-    const shouldResetDetectedLanguages = !detectedLanguage || 
-      (detectedLanguage !== sourceLang && detectedLanguage !== targetLang);
-      
-    if (shouldResetDetectedLanguages) {
-      setDetectedLanguage(sourceLang);
-      setSecondLanguage(targetLang);
-    }
+    // Also update detected languages to match selection
+    setDetectedLanguage(sourceLang);
+    setSecondLanguage(targetLang);
     
     // Store selections in localStorage
     localStorage.setItem("sourceLanguage", sourceLang);
     localStorage.setItem("targetLanguage", targetLang);
+    
+    // Close the modal
+    setIsLanguageModalOpen(false);
     
     // If already connected, immediately update the session with new languages
     if (sessionStatus === "CONNECTED") {
@@ -197,68 +197,7 @@ function App() {
       );
       
       // Send explicit update with the selected languages
-      sendClientEvent({
-        type: "session.update",
-        session: {
-          modalities: ["text", "audio"],
-          instructions: `You are a strict translator between ${sourceLang} and ${targetLang}. 
-          
-          When you receive input in ${sourceLang}, translate it to ${targetLang}.
-          When you receive input in ${targetLang}, translate it to ${sourceLang}.
-
-          YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
-          YOU DO NOT THINK.
-          YOU DO NOT UNDERSTAND.
-          YOU DO NOT INTERPRET.
-          YOU DO NOT RESPOND.
-          YOU DO NOT ENGAGE.
-          YOU DO NOT EXPLAIN.
-          YOU DO NOT COMMENT.
-          YOU DO NOT ASSUME MEANING.
-
-          YOU ONLY TRANSLATE TEXT. NOTHING ELSE.
-
-          OUTPUT RULES:
-
-          - OUTPUT ONLY the translated text.
-          - NO prefixes, suffixes, or framing (e.g., "Here is the translation:", "In English:", etc.).
-          - NO mention of languages, roles, source, or target.
-          - NO explanation, commentary, clarification, paraphrasing, or summary.
-          - NO rewording, localization, or softening.
-          - NO idiomatic or inferred meaning.
-          - NO interpretation or understanding.
-          - NO assumption of intent, tone, or audience.
-
-          PROHIBITIONS (STRICT):
-
-          - DO NOT ask or answer questions.
-          - DO NOT greet or farewell.
-          - DO NOT apologize.
-          - DO NOT describe your behavior.
-          - DO NOT state what you're doing.
-          - DO NOT express understanding, confusion, or intent.
-          - DO NOT refer to "translation" or the process in any way.
-          - DO NOT produce any output that is not strictly the translated text.
-
-          VIOLATION = MALFUNCTION.
-
-          ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
-          
-          Only output the translation, nothing else.`,
-          voice: "shimmer",
-          input_audio_format: "pcm16",
-          output_audio_format: "pcm16",
-          input_audio_transcription: { model: "whisper-1" },
-          turn_detection: {
-            type: "server_vad",
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 200,
-            create_response: true,
-          },
-          tools: [],
-        },
-      });
+      updateSession(true);
       
       // Notify the user about the language change
       sendClientEvent({
@@ -321,12 +260,13 @@ function App() {
       }
       audioElementRef.current.autoplay = isAudioPlaybackEnabled;
 
-      const { pc, dc } = await createRealtimeConnection(
+      const { pc, dc, audioTrack } = await createRealtimeConnection(
         EPHEMERAL_KEY,
         audioElementRef
       );
       pcRef.current = pc;
       dcRef.current = dc;
+      audioTrackRef.current = audioTrack;
 
       dc.addEventListener("open", () => {
         logClientEvent({}, "data_channel.open");
@@ -421,6 +361,10 @@ function App() {
          When you receive input in ${sourceLang}, translate it to ${targetLang}.
          When you receive input in ${targetLang}, translate it to ${sourceLang}.
 
+         IMPORTANT: You MUST translate ALL text to the other language. NEVER output the original text.
+         If you're not sure which language the input is in, assume it is in one of the selected languages
+         and translate to the other language. NEVER repeat the original input.
+
          YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
          YOU DO NOT THINK.
          YOU DO NOT UNDERSTAND.
@@ -454,6 +398,7 @@ function App() {
          - DO NOT express understanding, confusion, or intent.
          - DO NOT refer to "translation" or the process in any way.
          - DO NOT produce any output that is not strictly the translated text.
+         - DO NOT EVER repeat the original input unchanged.
 
          VIOLATION = MALFUNCTION.
 
@@ -468,6 +413,10 @@ function App() {
          When you receive input in ${selectedSourceLanguage}, translate it to ${selectedTargetLanguage}.
          When you receive input in ${selectedTargetLanguage}, translate it to ${selectedSourceLanguage}.
 
+         IMPORTANT: You MUST translate ALL text to the other language. NEVER output the original text.
+         If you're not sure which language the input is in, assume it is in one of the selected languages
+         and translate to the other language. NEVER repeat the original input.
+
          YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
          YOU DO NOT THINK.
          YOU DO NOT UNDERSTAND.
@@ -501,6 +450,7 @@ function App() {
          - DO NOT express understanding, confusion, or intent.
          - DO NOT refer to "translation" or the process in any way.
          - DO NOT produce any output that is not strictly the translated text.
+         - DO NOT EVER repeat the original input unchanged.
 
          VIOLATION = MALFUNCTION.
 
@@ -594,6 +544,11 @@ function App() {
       return;
     cancelAssistantSpeech();
 
+    // Enable the audio track
+    if (audioTrackRef.current) {
+      audioTrackRef.current.enabled = true;
+    }
+
     setIsRecording(true);
     sendClientEvent({ type: "input_audio_buffer.clear" }, "clear recording buffer");
   };
@@ -605,6 +560,11 @@ function App() {
       !isRecording
     )
       return;
+
+    // Disable the audio track
+    if (audioTrackRef.current) {
+      audioTrackRef.current.enabled = false;
+    }
 
     setIsRecording(false);
     sendClientEvent({ type: "input_audio_buffer.commit" }, "commit recording");

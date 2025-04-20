@@ -1,19 +1,30 @@
-import { RefObject } from "react";
+import React from "react";
 
-export async function createRealtimeConnection(
+export const createRealtimeConnection = async (
   EPHEMERAL_KEY: string,
-  audioElement: RefObject<HTMLAudioElement | null>
-): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel }> {
+  audioElement: React.RefObject<HTMLAudioElement>
+): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel; audioTrack: MediaStreamTrack }> => {
   const pc = new RTCPeerConnection();
 
-  pc.ontrack = (e) => {
+  pc.addEventListener("track", (event) => {
+    console.log("Received audio track");
     if (audioElement.current) {
-        audioElement.current.srcObject = e.streams[0];
+      audioElement.current.srcObject = event.streams[0];
+      console.log("Attached audio to element");
     }
-  };
+  });
 
-  const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
-  pc.addTrack(ms.getTracks()[0]);
+  // Get user media but don't automatically start capturing audio
+  // The track will be enabled/disabled based on the recording state
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+  });
+  const audioTrack = stream.getAudioTracks()[0];
+  
+  // Disable the audio track initially - it will be enabled when recording starts
+  audioTrack.enabled = false;
+  
+  pc.addTrack(audioTrack, stream);
 
   const dc = pc.createDataChannel("oai-events");
 
@@ -41,5 +52,5 @@ export async function createRealtimeConnection(
 
   await pc.setRemoteDescription(answer);
 
-  return { pc, dc };
-} 
+  return { pc, dc, audioTrack };
+}; 
