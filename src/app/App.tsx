@@ -10,6 +10,7 @@ import Image from "next/image";
 import Transcript from "./components/Transcript";
 import Events from "./components/Events";
 import BottomToolbar from "./components/BottomToolbar";
+import LanguageSelectionModal from "./components/LanguageSelectionModal";
 
 // Types
 import { AgentConfig, SessionStatus } from "@/app/types";
@@ -25,6 +26,23 @@ import { createRealtimeConnection } from "./lib/realtimeConnection";
 // Agent configs
 import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
 
+// Language utilities
+const getLanguageName = (code: string): string => {
+  const languages: {[key: string]: string} = {
+    en: "English",
+    zh: "Chinese",
+    ja: "Japanese",
+    ko: "Korean",
+    ru: "Russian",
+    ar: "Arabic",
+    hi: "Hindi",
+    es: "Spanish",
+    fr: "French",
+    de: "German"
+  };
+  return languages[code] || code;
+};
+
 function App() {
   const searchParams = useSearchParams();
 
@@ -32,6 +50,11 @@ function App() {
     useTranscript();
   const { logClientEvent, logServerEvent } = useEvent();
 
+  // Language selection modal state
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
+  const [selectedSourceLanguage, setSelectedSourceLanguage] = useState<string>("");
+  const [selectedTargetLanguage, setSelectedTargetLanguage] = useState<string>("");
+  
   const [selectedAgentName, setSelectedAgentName] = useState<string>("");
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] =
     useState<AgentConfig[] | null>(null);
@@ -77,6 +100,8 @@ function App() {
     setDetectedLanguage,
     setSecondLanguage,
     isRecording,
+    selectedSourceLanguage,
+    selectedTargetLanguage,
   });
 
   useEffect(() => {
@@ -124,6 +149,128 @@ function App() {
       updateSession();
     }
   }, [isRecording]);
+
+  // Check for stored language preferences on initial load
+  useEffect(() => {
+    const storedSourceLang = localStorage.getItem("sourceLanguage");
+    const storedTargetLang = localStorage.getItem("targetLanguage");
+    
+    if (storedSourceLang && storedTargetLang) {
+      setSelectedSourceLanguage(storedSourceLang);
+      setSelectedTargetLanguage(storedTargetLang);
+      setDetectedLanguage(storedSourceLang);
+      setSecondLanguage(storedTargetLang);
+    } else {
+      // Show language selection modal if no stored preferences
+      setIsLanguageModalOpen(true);
+      // Set defaults
+      setSelectedSourceLanguage("en");
+      setSelectedTargetLanguage("es");
+    }
+  }, []);
+  
+  // Handle language selection from modal
+  const handleLanguageSelection = (sourceLang: string, targetLang: string) => {
+    setSelectedSourceLanguage(sourceLang);
+    setSelectedTargetLanguage(targetLang);
+    
+    // Only overwrite detected languages if we haven't already detected any
+    // or if we're explicitly changing the language pair
+    const shouldResetDetectedLanguages = !detectedLanguage || 
+      (detectedLanguage !== sourceLang && detectedLanguage !== targetLang);
+      
+    if (shouldResetDetectedLanguages) {
+      setDetectedLanguage(sourceLang);
+      setSecondLanguage(targetLang);
+    }
+    
+    // Store selections in localStorage
+    localStorage.setItem("sourceLanguage", sourceLang);
+    localStorage.setItem("targetLanguage", targetLang);
+    
+    // If already connected, immediately update the session with new languages
+    if (sessionStatus === "CONNECTED") {
+      // Force a clear session update with the new language pair
+      sendClientEvent(
+        { type: "input_audio_buffer.clear" },
+        "clear audio buffer on language change"
+      );
+      
+      // Send explicit update with the selected languages
+      sendClientEvent({
+        type: "session.update",
+        session: {
+          modalities: ["text", "audio"],
+          instructions: `You are a strict translator between ${sourceLang} and ${targetLang}. 
+          
+          When you receive input in ${sourceLang}, translate it to ${targetLang}.
+          When you receive input in ${targetLang}, translate it to ${sourceLang}.
+
+          YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
+          YOU DO NOT THINK.
+          YOU DO NOT UNDERSTAND.
+          YOU DO NOT INTERPRET.
+          YOU DO NOT RESPOND.
+          YOU DO NOT ENGAGE.
+          YOU DO NOT EXPLAIN.
+          YOU DO NOT COMMENT.
+          YOU DO NOT ASSUME MEANING.
+
+          YOU ONLY TRANSLATE TEXT. NOTHING ELSE.
+
+          OUTPUT RULES:
+
+          - OUTPUT ONLY the translated text.
+          - NO prefixes, suffixes, or framing (e.g., "Here is the translation:", "In English:", etc.).
+          - NO mention of languages, roles, source, or target.
+          - NO explanation, commentary, clarification, paraphrasing, or summary.
+          - NO rewording, localization, or softening.
+          - NO idiomatic or inferred meaning.
+          - NO interpretation or understanding.
+          - NO assumption of intent, tone, or audience.
+
+          PROHIBITIONS (STRICT):
+
+          - DO NOT ask or answer questions.
+          - DO NOT greet or farewell.
+          - DO NOT apologize.
+          - DO NOT describe your behavior.
+          - DO NOT state what you're doing.
+          - DO NOT express understanding, confusion, or intent.
+          - DO NOT refer to "translation" or the process in any way.
+          - DO NOT produce any output that is not strictly the translated text.
+
+          VIOLATION = MALFUNCTION.
+
+          ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
+          
+          Only output the translation, nothing else.`,
+          voice: "shimmer",
+          input_audio_format: "pcm16",
+          output_audio_format: "pcm16",
+          input_audio_transcription: { model: "whisper-1" },
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 200,
+            create_response: true,
+          },
+          tools: [],
+        },
+      });
+      
+      // Notify the user about the language change
+      sendClientEvent({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "text", text: `Language pair updated: now translating between ${getLanguageName(sourceLang)} and ${getLanguageName(targetLang)}.` }],
+        },
+      });
+    }
+  };
 
   // Update session when languages are detected or on initial connection
   useEffect(() => {
@@ -261,12 +408,18 @@ function App() {
           create_response: true,
         };
 
-    // Create translation instructions based on detected languages or use default
-    const translationInstructions = detectedLanguage && secondLanguage
-      ? `You are a strict translator between ${detectedLanguage} and ${secondLanguage}. 
+    // Use selected languages if available, fall back to detected
+    const sourceLang = detectedLanguage || selectedSourceLanguage;
+    const targetLang = secondLanguage || selectedTargetLanguage;
+    
+    // Create translation instructions based on languages
+    let translationInstructions = "";
+    
+    if (sourceLang && targetLang) {
+      translationInstructions = `You are a strict translator between ${sourceLang} and ${targetLang}. 
       
-         When you receive input in ${detectedLanguage}, translate it to ${secondLanguage}.
-         When you receive input in ${secondLanguage}, translate it to ${detectedLanguage}.
+         When you receive input in ${sourceLang}, translate it to ${targetLang}.
+         When you receive input in ${targetLang}, translate it to ${sourceLang}.
 
          YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
          YOU DO NOT THINK.
@@ -306,8 +459,55 @@ function App() {
 
          ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
          
-         Only output the translation, nothing else.`
-      : `I detected ${detectedLanguage || "a language"}. Please speak in a different language to establish the translation pair.`;
+         Only output the translation, nothing else.`;
+    } else if (selectedSourceLanguage && selectedTargetLanguage) {
+      // If we have selected languages but haven't detected any yet,
+      // use the selected pair
+      translationInstructions = `You are a strict translator between ${selectedSourceLanguage} and ${selectedTargetLanguage}. 
+      
+         When you receive input in ${selectedSourceLanguage}, translate it to ${selectedTargetLanguage}.
+         When you receive input in ${selectedTargetLanguage}, translate it to ${selectedSourceLanguage}.
+
+         YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
+         YOU DO NOT THINK.
+         YOU DO NOT UNDERSTAND.
+         YOU DO NOT INTERPRET.
+         YOU DO NOT RESPOND.
+         YOU DO NOT ENGAGE.
+         YOU DO NOT EXPLAIN.
+         YOU DO NOT COMMENT.
+         YOU DO NOT ASSUME MEANING.
+
+         YOU ONLY TRANSLATE TEXT. NOTHING ELSE.
+
+         OUTPUT RULES:
+
+         - OUTPUT ONLY the translated text.
+         - NO prefixes, suffixes, or framing (e.g., "Here is the translation:", "In English:", etc.).
+         - NO mention of languages, roles, source, or target.
+         - NO explanation, commentary, clarification, paraphrasing, or summary.
+         - NO rewording, localization, or softening.
+         - NO idiomatic or inferred meaning.
+         - NO interpretation or understanding.
+         - NO assumption of intent, tone, or audience.
+
+         PROHIBITIONS (STRICT):
+
+         - DO NOT ask or answer questions.
+         - DO NOT greet or farewell.
+         - DO NOT apologize.
+         - DO NOT describe your behavior.
+         - DO NOT state what you're doing.
+         - DO NOT express understanding, confusion, or intent.
+         - DO NOT refer to "translation" or the process in any way.
+         - DO NOT produce any output that is not strictly the translated text.
+
+         VIOLATION = MALFUNCTION.
+
+         ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
+         
+         Only output the translation, nothing else.`;
+    }
 
     const instructions = translationInstructions;
     const tools = currentAgent?.tools || [];
@@ -327,6 +527,20 @@ function App() {
     };
 
     sendClientEvent(sessionUpdateEvent);
+    
+    if (shouldTriggerResponse && sessionStatus === "CONNECTED") {
+      // Optional: Trigger a welcome message showing the selected language pair
+      if (selectedSourceLanguage && selectedTargetLanguage && !detectedLanguage && !secondLanguage) {
+        sendClientEvent({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "text", text: `Ready to translate between ${getLanguageName(selectedSourceLanguage)} and ${getLanguageName(selectedTargetLanguage)}.` }],
+          },
+        });
+      }
+    }
   };
 
   const cancelAssistantSpeech = async () => {
@@ -477,11 +691,17 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       {/* Language pair display */}
-      {/* {detectedLanguage && secondLanguage && (
-        <div className="bg-white p-2 text-center text-sm text-gray-600 border-b">
-          Translation: {detectedLanguage} ↔ {secondLanguage}
+      {selectedSourceLanguage && selectedTargetLanguage && (
+        <div className="bg-white p-2 text-center text-sm text-gray-600 border-b flex justify-center items-center space-x-2">
+          <span>Translation: {getLanguageName(selectedSourceLanguage)} ↔ {getLanguageName(selectedTargetLanguage)}</span>
+          <button 
+            onClick={() => setIsLanguageModalOpen(true)}
+            className="text-blue-600 hover:underline text-xs ml-2"
+          >
+            Change
+          </button>
         </div>
-      )} */}
+      )}
 
       {/* Main chat area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -500,11 +720,6 @@ function App() {
               }`}
             >
               {item.title || item.data?.text || ""}
-              {/* {item.role === "user" && (detectedLanguage || secondLanguage) && (
-                <div className="text-xs mt-1 opacity-75">
-                  {detectedLanguage && `Detected: ${detectedLanguage}`}
-                </div>
-              )} */}
             </div>
           </div>
         ))}
@@ -575,6 +790,15 @@ function App() {
           </button>
         </div>
       </div>
+
+      {/* Language Selection Modal */}
+      <LanguageSelectionModal
+        isOpen={isLanguageModalOpen}
+        onClose={() => setIsLanguageModalOpen(false)}
+        onSave={handleLanguageSelection}
+        initialSourceLanguage={selectedSourceLanguage || "en"}
+        initialTargetLanguage={selectedTargetLanguage || "es"}
+      />
     </div>
   );
 }

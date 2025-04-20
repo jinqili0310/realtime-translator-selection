@@ -3,7 +3,23 @@
 import { ServerEvent, SessionStatus, AgentConfig } from "@/app/types";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { useEvent } from "@/app/contexts/EventContext";
-import { useRef } from "react";
+
+// Language utilities
+const getLanguageName = (code: string): string => {
+  const languages: {[key: string]: string} = {
+    en: "English",
+    zh: "Chinese",
+    ja: "Japanese",
+    ko: "Korean",
+    ru: "Russian",
+    ar: "Arabic",
+    hi: "Hindi",
+    es: "Spanish",
+    fr: "French",
+    de: "German"
+  };
+  return languages[code] || code;
+};
 
 export interface UseHandleServerEventParams {
   setSessionStatus: (status: SessionStatus) => void;
@@ -14,6 +30,8 @@ export interface UseHandleServerEventParams {
   setDetectedLanguage: (language: string) => void;
   setSecondLanguage: (language: string) => void;
   isRecording: boolean;
+  selectedSourceLanguage?: string;
+  selectedTargetLanguage?: string;
   shouldForceResponse?: boolean;
 }
 
@@ -26,10 +44,11 @@ export function useHandleServerEvent({
   setDetectedLanguage,
   setSecondLanguage,
   isRecording,
+  selectedSourceLanguage,
+  selectedTargetLanguage,
 }: UseHandleServerEventParams) {
   const {
     transcriptItems,
-    addTranscriptBreadcrumb,
     addTranscriptMessage,
     updateTranscriptMessage,
     updateTranscriptItemStatus,
@@ -108,6 +127,58 @@ export function useHandleServerEvent({
     }
   };
 
+  // Helper function to update session with specified language pair
+  const updateSessionWithLanguages = (lang1: string, lang2: string) => {
+    sendClientEvent({
+      type: "session.update",
+      session: {
+        modalities: ["text", "audio"],
+        instructions: `You are a strict translator between ${lang1} and ${lang2}. 
+          When you receive input in ${lang1}, translate it to ${lang2}.
+          When you receive input in ${lang2}, translate it to ${lang1}.
+          
+          YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
+          YOU ONLY TRANSLATE TEXT. NOTHING ELSE.
+          
+          OUTPUT RULES:
+          - OUTPUT ONLY the translated text.
+          - NO prefixes, suffixes, or framing.
+          - NO mention of languages, roles, source, or target.
+          - NO explanation, commentary, clarification, paraphrasing, or summary.
+          - NO rewording, localization, or softening.
+          - NO idiomatic or inferred meaning.
+          - NO interpretation or understanding.
+          - NO assumption of intent, tone, or audience.
+          
+          PROHIBITIONS (STRICT):
+          - DO NOT ask or answer questions.
+          - DO NOT greet or farewell.
+          - DO NOT apologize.
+          - DO NOT describe your behavior.
+          - DO NOT state what you're doing.
+          - DO NOT express understanding, confusion, or intent.
+          - DO NOT refer to "translation" or the process in any way.
+          - DO NOT produce any output that is not strictly the translated text.
+          
+          VIOLATION = MALFUNCTION.
+          ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
+          
+          Only output the translation, nothing else.`,
+        voice: "shimmer",
+        input_audio_format: "pcm16",
+        output_audio_format: "pcm16",
+        input_audio_transcription: { model: "whisper-1" },
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 200,
+          create_response: true,
+        },
+      },
+    });
+  };
+
   const handleServerEvent = (serverEvent: ServerEvent) => {
     logServerEvent(serverEvent);
 
@@ -161,77 +232,67 @@ export function useHandleServerEvent({
             // Set first language
             const firstLang = sortedLanguages[0][0];
             console.log("First detected language:", firstLang);
-            if (firstLang) {
-              setDetectedLanguage(firstLang);
-            }
-
-            // Find second language (different from first)
-            if (sortedLanguages.length > 1) {
-              const secondLang = sortedLanguages[1][0];
-              console.log("Second detected language:", secondLang);
-              if (secondLang && firstLang !== secondLang) {
+            
+            // Always store the detected language for reference
+            setDetectedLanguage(firstLang);
+            
+            // Check if we have a selected language pair
+            if (selectedSourceLanguage && selectedTargetLanguage) {
+              // If the detected language is one of our selected languages,
+              // use the predefined pair
+              if (firstLang === selectedSourceLanguage || firstLang === selectedTargetLanguage) {
+                // Set the other language as the target language
+                const secondLang = firstLang === selectedSourceLanguage 
+                  ? selectedTargetLanguage 
+                  : selectedSourceLanguage;
+                
+                console.log("Detected language matches selected pair, translating:", firstLang, "→", secondLang);
                 setSecondLanguage(secondLang);
                 
-                // Update session with new language pair
+                // Update session with the language pair
+                updateSessionWithLanguages(firstLang, secondLang);
+              } else {
+                // If detected language is different from our selected languages,
+                // inform the user but still use the selected pair
+                console.log("Detected language doesn't match selected pair, using selected pair anyway");
+                
+                // Don't change the detected language setup, but remind the user
+                // about the selected pair
                 sendClientEvent({
-                  type: "session.update",
-                  session: {
-                    modalities: ["text", "audio"],
-                    instructions: `You are a strict translator between ${firstLang} and ${secondLang}. 
-                      When you receive input in ${firstLang}, translate it to ${secondLang}.
-                      When you receive input in ${secondLang}, translate it to ${firstLang}.
-                      
-                      YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
-                      YOU ONLY TRANSLATE TEXT. NOTHING ELSE.
-                      
-                      OUTPUT RULES:
-                      - OUTPUT ONLY the translated text.
-                      - NO prefixes, suffixes, or framing.
-                      - NO mention of languages, roles, source, or target.
-                      - NO explanation, commentary, clarification, paraphrasing, or summary.
-                      - NO rewording, localization, or softening.
-                      - NO idiomatic or inferred meaning.
-                      - NO interpretation or understanding.
-                      - NO assumption of intent, tone, or audience.
-                      
-                      PROHIBITIONS (STRICT):
-                      - DO NOT ask or answer questions.
-                      - DO NOT greet or farewell.
-                      - DO NOT apologize.
-                      - DO NOT describe your behavior.
-                      - DO NOT state what you're doing.
-                      - DO NOT express understanding, confusion, or intent.
-                      - DO NOT refer to "translation" or the process in any way.
-                      - DO NOT produce any output that is not strictly the translated text.
-                      
-                      VIOLATION = MALFUNCTION.
-                      ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
-                      
-                      Only output the translation, nothing else.`,
-                    voice: "shimmer",
-                    input_audio_format: "pcm16",
-                    output_audio_format: "pcm16",
-                    input_audio_transcription: { model: "whisper-1" },
-                    turn_detection: {
-                      type: "server_vad",
-                      threshold: 0.5,
-                      prefix_padding_ms: 300,
-                      silence_duration_ms: 200,
-                      create_response: true,
-                    },
+                  type: "conversation.item.create",
+                  item: {
+                    type: "message",
+                    role: "assistant",
+                    content: [{ type: "text", text: `Note: I detected ${getLanguageName(firstLang)}, which is not in your selected language pair. I will still translate between ${getLanguageName(selectedSourceLanguage)} and ${getLanguageName(selectedTargetLanguage)} as configured.` }],
+                  },
+                });
+                
+                // Forcefully update session with the selected language pair only
+                updateSessionWithLanguages(selectedSourceLanguage, selectedTargetLanguage);
+              }
+            } else {
+              // If no selected language pair exists, fall back to regular detection logic
+              // Find second language (different from first)
+              if (sortedLanguages.length > 1) {
+                const secondLang = sortedLanguages[1][0];
+                console.log("Second detected language:", secondLang);
+                if (secondLang && firstLang !== secondLang) {
+                  setSecondLanguage(secondLang);
+                  
+                  // Update session with detected language pair
+                  updateSessionWithLanguages(firstLang, secondLang);
+                }
+              } else {
+                // Ask for second language if no selected pair and only one language detected
+                sendClientEvent({
+                  type: "conversation.item.create",
+                  item: {
+                    type: "message",
+                    role: "assistant",
+                    content: [{ type: "text", text: `I detected ${getLanguageName(firstLang)}. Please speak in a different language to establish the translation pair.` }],
                   },
                 });
               }
-            } else {
-              // If only one language detected, ask for the second language
-              sendClientEvent({
-                type: "conversation.item.create",
-                item: {
-                  type: "message",
-                  role: "assistant",
-                  content: [{ type: "text", text: `I detected ${firstLang}. Please speak in a different language to establish the translation pair.` }],
-                },
-              });
             }
           }
         }
@@ -245,6 +306,12 @@ export function useHandleServerEvent({
             `session.id: ${serverEvent.session.id
             }\nStarted at: ${new Date().toLocaleString()}`
           );
+          
+          // If we already have selected languages, update the session with them immediately
+          if (selectedSourceLanguage && selectedTargetLanguage) {
+            console.log("Session created with selected language pair:", selectedSourceLanguage, selectedTargetLanguage);
+            updateSessionWithLanguages(selectedSourceLanguage, selectedTargetLanguage);
+          }
         }
         break;
       }
