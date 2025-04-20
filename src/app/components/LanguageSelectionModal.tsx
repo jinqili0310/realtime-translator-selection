@@ -35,25 +35,25 @@ export default function LanguageSelectionModal({
   initialSourceLanguage = "en",
   initialTargetLanguage = "es",
 }: LanguageSelectionModalProps) {
-  const [sourceLanguage, setSourceLanguage] = useState(initialSourceLanguage);
-  const [targetLanguage, setTargetLanguage] = useState(initialTargetLanguage);
+  const [firstLanguage, setFirstLanguage] = useState(initialSourceLanguage);
+  const [secondLanguage, setSecondLanguage] = useState(initialTargetLanguage);
 
   useEffect(() => {
     if (isOpen) {
       // Reset to initial values when modal opens
-      setSourceLanguage(initialSourceLanguage);
-      setTargetLanguage(initialTargetLanguage);
+      setFirstLanguage(initialSourceLanguage);
+      setSecondLanguage(initialTargetLanguage);
     }
   }, [isOpen, initialSourceLanguage, initialTargetLanguage]);
 
   if (!isOpen) return null;
 
   const handleSave = () => {
-    if (sourceLanguage === targetLanguage) {
-      alert("Please select different languages for source and target");
+    if (firstLanguage === secondLanguage) {
+      alert("Please select different languages for translation");
       return;
     }
-    onSave(sourceLanguage, targetLanguage);
+    onSave(firstLanguage, secondLanguage);
     onClose();
   };
 
@@ -63,7 +63,7 @@ export default function LanguageSelectionModal({
         <div className="mb-4">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Select Languages</h2>
           <p className="text-sm text-gray-600 mb-4">
-            Choose the two languages you want to translate between. The system will automatically detect which one you&apos;re speaking.
+            Choose two languages to translate between. The app will automatically detect which language you&apos;re speaking and translate to the other language.
           </p>
           
           <div className="mb-4">
@@ -71,17 +71,17 @@ export default function LanguageSelectionModal({
               First Language
             </label>
             <select
-              value={sourceLanguage}
-              onChange={(e) => setSourceLanguage(e.target.value)}
+              value={firstLanguage}
+              onChange={(e) => setFirstLanguage(e.target.value)}
               className="text-black w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {LANGUAGES.map((lang) => (
                 <option 
                   key={`source-${lang.code}`} 
                   value={lang.code}
-                  disabled={lang.code === targetLanguage}
+                  disabled={lang.code === secondLanguage}
                 >
-                  {lang.name} {lang.code === targetLanguage ? '(already selected)' : ''}
+                  {lang.name} {lang.code === secondLanguage ? '(already selected)' : ''}
                 </option>
               ))}
             </select>
@@ -92,17 +92,17 @@ export default function LanguageSelectionModal({
               Second Language
             </label>
             <select
-              value={targetLanguage}
-              onChange={(e) => setTargetLanguage(e.target.value)}
+              value={secondLanguage}
+              onChange={(e) => setSecondLanguage(e.target.value)}
               className="text-black w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {LANGUAGES.map((lang) => (
                 <option 
                   key={`target-${lang.code}`} 
                   value={lang.code}
-                  disabled={lang.code === sourceLanguage}
+                  disabled={lang.code === firstLanguage}
                 >
-                  {lang.name} {lang.code === sourceLanguage ? '(already selected)' : ''}
+                  {lang.name} {lang.code === firstLanguage ? '(already selected)' : ''}
                 </option>
               ))}
             </select>

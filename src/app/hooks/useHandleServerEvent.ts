@@ -137,6 +137,26 @@ export function useHandleServerEvent({
           When you receive input in ${lang1}, translate it to ${lang2}.
           When you receive input in ${lang2}, translate it to ${lang1}.
           
+          !!! CRITICAL !!! YOU ARE A PURE TRANSLATOR ONLY. 
+          
+          YOU HAVE NO CONVERSATIONAL ABILITIES.
+          YOU CANNOT ANSWER QUESTIONS.
+          YOU CANNOT GIVE INFORMATION.
+          YOU CANNOT HAVE OPINIONS.
+          YOU CANNOT MAKE SUGGESTIONS.
+          
+          EVEN IF THE USER ASKS YOU A DIRECT QUESTION, YOU MUST ONLY TRANSLATE IT, NEVER ANSWER IT.
+          
+          EXAMPLE:
+          User: "What is the weather today?"
+          YOU: [translate "What is the weather today?" to the other language]
+          NEVER: "I don't have access to weather information."
+          
+          EXAMPLE:
+          User: "Can you help me with something?"
+          YOU: [translate "Can you help me with something?" to the other language]
+          NEVER: "Yes, I can help you. What do you need?"
+          
           IMPORTANT: You MUST translate ALL text to the other language. NEVER output the original text.
           If you're not sure which language the input is in, assume it is in one of the selected languages
           and translate to the other language. NEVER repeat the original input unchanged.
@@ -170,6 +190,9 @@ export function useHandleServerEvent({
           - DO NOT produce any output that is not strictly the translated text.
           - DO NOT EVER repeat the original input unchanged.
           - DO NOT try to understand or interpret the context of the message.
+          - DO NOT EVER engage in conversation, even if explicitly asked to.
+          - DO NOT EVER acknowledge that you are an AI or assistant.
+          - DO NOT EVER offer help beyond translating the given text.
           
           VIOLATION = MALFUNCTION.
           ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
@@ -250,19 +273,24 @@ export function useHandleServerEvent({
             // Check if we have a selected language pair
             if (selectedSourceLanguage && selectedTargetLanguage) {
               // If the detected language is one of our selected languages,
-              // use the predefined pair
-              if (firstLang === selectedSourceLanguage || firstLang === selectedTargetLanguage) {
-                // Set the other language as the target language
-                const secondLang = firstLang === selectedSourceLanguage 
-                  ? selectedTargetLanguage 
-                  : selectedSourceLanguage;
+              // translate to the other language in the pair
+              if (firstLang === selectedSourceLanguage) {
+                // Detected language is the first selected language, translate to the second
+                console.log("Detected language is source, translating to target:", firstLang, "→", selectedTargetLanguage);
+                setSecondLanguage(selectedTargetLanguage);
                 
-                console.log("Detected language matches selected pair, translating:", firstLang, "→", secondLang);
-                setSecondLanguage(secondLang);
+                // Update session with detected language as source, other as target
+                updateSessionWithLanguages(firstLang, selectedTargetLanguage);
+              } 
+              else if (firstLang === selectedTargetLanguage) {
+                // Detected language is the second selected language, translate to the first
+                console.log("Detected language is target, translating to source:", firstLang, "→", selectedSourceLanguage);
+                setSecondLanguage(selectedSourceLanguage);
                 
-                // Update session with the language pair
-                updateSessionWithLanguages(firstLang, secondLang);
-              } else {
+                // Update session with detected language as source, other as target
+                updateSessionWithLanguages(firstLang, selectedSourceLanguage);
+              } 
+              else {
                 // If detected language is different from our selected languages,
                 // inform the user but still use the selected pair
                 console.log("Detected language doesn't match selected pair, using selected pair anyway");
@@ -274,11 +302,11 @@ export function useHandleServerEvent({
                   item: {
                     type: "message",
                     role: "assistant",
-                    content: [{ type: "text", text: `Note: I detected ${getLanguageName(firstLang)}, which is not in your selected language pair. I will still translate between ${getLanguageName(selectedSourceLanguage)} and ${getLanguageName(selectedTargetLanguage)} as configured.` }],
+                    content: [{ type: "text", text: `Note: I detected ${getLanguageName(firstLang)}, which is not in your selected language pair. I will translate between ${getLanguageName(selectedSourceLanguage)} and ${getLanguageName(selectedTargetLanguage)} based on language detection.` }],
                   },
                 });
                 
-                // Forcefully update session with the selected language pair only
+                // Default to first language as source if detection fails
                 updateSessionWithLanguages(selectedSourceLanguage, selectedTargetLanguage);
               }
             } else {

@@ -124,12 +124,18 @@ function App() {
   });
 
   useEffect(() => {
+    if (!searchParams) return; // Skip if searchParams is not available yet
+    
     let finalAgentConfig = searchParams.get("agentConfig");
     if (!finalAgentConfig || !allAgentSets[finalAgentConfig]) {
       finalAgentConfig = defaultAgentSetKey;
-      const url = new URL(window.location.toString());
-      url.searchParams.set("agentConfig", finalAgentConfig);
-      window.location.replace(url.toString());
+      
+      // Only run this on the client-side
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.toString());
+        url.searchParams.set("agentConfig", finalAgentConfig);
+        window.location.replace(url.toString());
+      }
       return;
     }
 
@@ -195,9 +201,9 @@ function App() {
     setSelectedSourceLanguage(sourceLang);
     setSelectedTargetLanguage(targetLang);
     
-    // Also update detected languages to match selection
-    setDetectedLanguage(sourceLang);
-    setSecondLanguage(targetLang);
+    // Clear any previously detected languages
+    setDetectedLanguage("");
+    setSecondLanguage("");
     
     // Store selections in localStorage
     localStorage.setItem("sourceLanguage", sourceLang);
@@ -223,7 +229,7 @@ function App() {
         item: {
           type: "message",
           role: "assistant",
-          content: [{ type: "text", text: `Language pair updated: now translating between ${getLanguageName(sourceLang)} and ${getLanguageName(targetLang)}.` }],
+          content: [{ type: "text", text: `Language pair updated: now ready to translate between ${getLanguageName(sourceLang)} and ${getLanguageName(targetLang)}.` }],
         },
       });
     }
@@ -366,7 +372,7 @@ function App() {
           create_response: true,
         };
 
-    // Use selected languages if available, fall back to detected
+    // Use detected languages if available, fall back to selected
     const sourceLang = detectedLanguage || selectedSourceLanguage;
     const targetLang = secondLanguage || selectedTargetLanguage;
     
@@ -379,6 +385,26 @@ function App() {
          When you receive input in ${sourceLang}, translate it to ${targetLang}.
          When you receive input in ${targetLang}, translate it to ${sourceLang}.
 
+         !!! CRITICAL !!! YOU ARE A PURE TRANSLATOR ONLY. 
+         
+         YOU HAVE NO CONVERSATIONAL ABILITIES.
+         YOU CANNOT ANSWER QUESTIONS.
+         YOU CANNOT GIVE INFORMATION.
+         YOU CANNOT HAVE OPINIONS.
+         YOU CANNOT MAKE SUGGESTIONS.
+         
+         EVEN IF THE USER ASKS YOU A DIRECT QUESTION, YOU MUST ONLY TRANSLATE IT, NEVER ANSWER IT.
+         
+         EXAMPLE:
+         User: "What is the weather today?"
+         YOU: [translate "What is the weather today?" to the other language]
+         NEVER: "I don't have access to weather information."
+         
+         EXAMPLE:
+         User: "Can you help me with something?"
+         YOU: [translate "Can you help me with something?" to the other language]
+         NEVER: "Yes, I can help you. What do you need?"
+
          IMPORTANT: You MUST translate ALL text to the other language. NEVER output the original text.
          If you're not sure which language the input is in, assume it is in one of the selected languages
          and translate to the other language. NEVER repeat the original input unchanged.
@@ -423,6 +449,9 @@ function App() {
          - DO NOT produce any output that is not strictly the translated text.
          - DO NOT EVER repeat the original input unchanged.
          - DO NOT try to understand or interpret the context of the message.
+         - DO NOT EVER engage in conversation, even if explicitly asked to.
+         - DO NOT EVER acknowledge that you are an AI or assistant.
+         - DO NOT EVER offer help beyond translating the given text.
 
          VIOLATION = MALFUNCTION.
 
@@ -431,11 +460,31 @@ function App() {
          Only output the translation, nothing else.`;
     } else if (selectedSourceLanguage && selectedTargetLanguage) {
       // If we have selected languages but haven't detected any yet,
-      // use the selected pair
+      // set up bidirectional translation
       translationInstructions = `You are a strict translator between ${selectedSourceLanguage} and ${selectedTargetLanguage}. 
       
          When you receive input in ${selectedSourceLanguage}, translate it to ${selectedTargetLanguage}.
          When you receive input in ${selectedTargetLanguage}, translate it to ${selectedSourceLanguage}.
+
+         !!! CRITICAL !!! YOU ARE A PURE TRANSLATOR ONLY. 
+         
+         YOU HAVE NO CONVERSATIONAL ABILITIES.
+         YOU CANNOT ANSWER QUESTIONS.
+         YOU CANNOT GIVE INFORMATION.
+         YOU CANNOT HAVE OPINIONS.
+         YOU CANNOT MAKE SUGGESTIONS.
+         
+         EVEN IF THE USER ASKS YOU A DIRECT QUESTION, YOU MUST ONLY TRANSLATE IT, NEVER ANSWER IT.
+         
+         EXAMPLE:
+         User: "What is the weather today?"
+         YOU: [translate "What is the weather today?" to the other language]
+         NEVER: "I don't have access to weather information."
+         
+         EXAMPLE:
+         User: "Can you help me with something?"
+         YOU: [translate "Can you help me with something?" to the other language]
+         NEVER: "Yes, I can help you. What do you need?"
 
          IMPORTANT: You MUST translate ALL text to the other language. NEVER output the original text.
          If you're not sure which language the input is in, assume it is in one of the selected languages
@@ -481,6 +530,9 @@ function App() {
          - DO NOT produce any output that is not strictly the translated text.
          - DO NOT EVER repeat the original input unchanged.
          - DO NOT try to understand or interpret the context of the message.
+         - DO NOT EVER engage in conversation, even if explicitly asked to.
+         - DO NOT EVER acknowledge that you are an AI or assistant.
+         - DO NOT EVER offer help beyond translating the given text.
 
          VIOLATION = MALFUNCTION.
 
@@ -509,7 +561,7 @@ function App() {
     sendClientEvent(sessionUpdateEvent);
     
     if (shouldTriggerResponse && sessionStatus === "CONNECTED") {
-      // Optional: Trigger a welcome message showing the selected language pair
+      // Only show welcome message when initializing with selected languages
       if (selectedSourceLanguage && selectedTargetLanguage && !detectedLanguage && !secondLanguage) {
         sendClientEvent({
           type: "conversation.item.create",
