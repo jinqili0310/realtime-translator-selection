@@ -76,8 +76,12 @@ export default function LanguageSelectionModal({
               className="text-black w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {LANGUAGES.map((lang) => (
-                <option key={`source-${lang.code}`} value={lang.code}>
-                  {lang.name}
+                <option 
+                  key={`source-${lang.code}`} 
+                  value={lang.code}
+                  disabled={lang.code === targetLanguage}
+                >
+                  {lang.name} {lang.code === targetLanguage ? '(already selected)' : ''}
                 </option>
               ))}
             </select>
@@ -93,8 +97,12 @@ export default function LanguageSelectionModal({
               className="text-black w-full p-2 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {LANGUAGES.map((lang) => (
-                <option key={`target-${lang.code}`} value={lang.code}>
-                  {lang.name}
+                <option 
+                  key={`target-${lang.code}`} 
+                  value={lang.code}
+                  disabled={lang.code === sourceLanguage}
+                >
+                  {lang.name} {lang.code === sourceLanguage ? '(already selected)' : ''}
                 </option>
               ))}
             </select>
