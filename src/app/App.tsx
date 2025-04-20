@@ -79,6 +79,21 @@ function App() {
   const [isAudioPlaybackEnabled, setIsAudioPlaybackEnabled] =
     useState<boolean>(true);
 
+  // Check if the screen is desktop-sized
+  const [isDesktop, setIsDesktop] = useState<boolean>(false);
+  
+  // Function to update desktop status based on screen width
+  const updateDesktopStatus = () => {
+    setIsDesktop(window.innerWidth >= 1024); // 1024px is a common breakpoint for desktop
+  };
+  
+  // Initialize and update desktop status on resize
+  useEffect(() => {
+    updateDesktopStatus();
+    window.addEventListener('resize', updateDesktopStatus);
+    return () => window.removeEventListener('resize', updateDesktopStatus);
+  }, []);
+
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
     if (dcRef.current && dcRef.current.readyState === "open") {
       logClientEvent(eventObj, eventNameSuffix);
@@ -671,110 +686,262 @@ function App() {
   const agentSetKey = searchParams.get("agentConfig") || "default";
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      {/* Language pair display */}
-      {selectedSourceLanguage && selectedTargetLanguage && (
-        <div className="bg-white p-2 text-center text-sm text-gray-600 border-b flex justify-center items-center space-x-2">
-          <span>Translation: {getLanguageName(selectedSourceLanguage)} ↔ {getLanguageName(selectedTargetLanguage)}</span>
-          <button 
-            onClick={() => setIsLanguageModalOpen(true)}
-            className="text-blue-600 hover:underline text-xs ml-2"
-          >
-            Change
-          </button>
-        </div>
-      )}
+    <div className={`${isDesktop ? 'h-screen bg-white p-8' : 'h-screen bg-gray-100'}`}>
+      {isDesktop ? (
+        // Desktop layout with iPhone frame
+        <div className="flex items-center justify-center h-full">
+          {/* Left side - iPhone frame around chat UI */}
+          <div className="w-[375px] h-[750px] bg-black rounded-[50px] p-3 relative shadow-2xl mr-20">
+            {/* iPhone notch */}
+            <div className="w-40 h-7 bg-black absolute top-0 left-1/2 transform -translate-x-1/2 rounded-b-xl z-10"></div>
+            
+            {/* iPhone screen */}
+            <div className="w-full h-full bg-gray-100 rounded-[40px] overflow-hidden flex flex-col">
+              {/* Language pair display */}
+              {selectedSourceLanguage && selectedTargetLanguage && (
+                <div className="bg-white pt-8 pb-4 px-2 text-center text-sm text-gray-600 border-b flex justify-center items-center space-x-2">
+                  <span>Translation: {getLanguageName(selectedSourceLanguage)} ↔ {getLanguageName(selectedTargetLanguage)}</span>
+                  <button 
+                    onClick={() => setIsLanguageModalOpen(true)}
+                    className="text-blue-600 hover:underline text-xs ml-2"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
 
-      {/* Main chat area */}
-      <div 
-        ref={chatContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4"
-      >
-        {transcriptItems.map((item) => (
-          <div
-            key={item.itemId}
-            className={`flex ${
-              item.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
-            <div
-              className={`max-w-[80%] rounded-2xl p-3 ${
-                item.role === "user"
-                  ? "bg-blue-500 text-white rounded-br-none"
-                  : "bg-white text-gray-800 rounded-bl-none shadow-sm"
-              }`}
+              {/* Main chat area */}
+              <div 
+                ref={chatContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-4"
+              >
+                {transcriptItems.map((item) => (
+                  <div
+                    key={item.itemId}
+                    className={`flex ${
+                      item.role === "user" ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-2xl p-3 ${
+                        item.role === "user"
+                          ? "bg-blue-500 text-white rounded-br-none"
+                          : "bg-white text-gray-800 rounded-bl-none shadow-sm"
+                      }`}
+                    >
+                      {item.title || item.data?.text || ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Input area */}
+              <div className="border-t border-gray-200 bg-white p-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={userText}
+                    onChange={(e) => setUserText(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && userText.trim()) {
+                        handleSendTextMessage();
+                      }
+                    }}
+                    placeholder="Type a message..."
+                    className="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={handleToggleRecording}
+                    className={`rounded-full p-3 transition-all duration-300 ${
+                      isRecording
+                        ? "bg-red-500 text-white animate-pulse ring-4 ring-red-200"
+                        : "bg-blue-500 text-white hover:bg-blue-600"
+                    }`}
+                    aria-label={isRecording ? "Stop recording" : "Start recording"}
+                    title={isRecording ? "Stop recording" : "Start recording"}
+                  >
+                    {isRecording ? (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* iPhone home indicator */}
+            <div className="w-1/3 h-1 bg-gray-300 absolute bottom-1.5 left-1/2 transform -translate-x-1/2 rounded-full"></div>
+          </div>
+          
+          {/* Right side - Microphone button */}
+          <div className="flex flex-col items-center">
+            <div className="text-white text-2xl mb-10 font-light">Click the microphone to toggle recording</div>
+            <button
+              onClick={handleToggleRecording}
+              className={`transition-all duration-300 transform ${isRecording ? 'scale-110 animate-pulse' : 'hover:scale-105'}`}
+              aria-label={isRecording ? "Stop recording" : "Start recording"}
             >
-              {item.title || item.data?.text || ""}
+              <div className={`relative`}>
+                <img 
+                  src="/mic01.png" 
+                  alt="Microphone" 
+                  width={200} 
+                  height={200} 
+                  className="rounded-full"
+                />
+                {isRecording && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full opacity-30 animate-ping"></div>
+                  </div>
+                )}
+              </div>
+            </button>
+            <div className={`mt-6 text-xl font-medium ${isRecording ? 'text-red-500' : 'text-green-500'}`}>
+              {isRecording ? 'Recording...' : 'Ready to record'}
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Input area */}
-      <div className="border-t border-gray-200 bg-white p-4">
-        <div className="flex items-center space-x-2">
-          <input
-            type="text"
-            value={userText}
-            onChange={(e) => setUserText(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === "Enter" && userText.trim()) {
-                handleSendTextMessage();
-              }
-            }}
-            placeholder="Type a message..."
-            className="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            onClick={handleToggleRecording}
-            className={`rounded-full p-3 transition-all duration-300 ${
-              isRecording
-                ? "bg-red-500 text-white animate-pulse ring-4 ring-red-200"
-                : "bg-blue-500 text-white hover:bg-blue-600"
-            }`}
-            aria-label={isRecording ? "Stop recording" : "Start recording"}
-            title={isRecording ? "Stop recording" : "Start recording"}
-          >
-            {isRecording ? (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
-                />
-              </svg>
-            ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                />
-              </svg>
-            )}
-          </button>
         </div>
-      </div>
+      ) : (
+        // Mobile layout (original UI)
+        <div className="flex flex-col h-screen bg-gray-100">
+          {/* Language pair display */}
+          {selectedSourceLanguage && selectedTargetLanguage && (
+            <div className="bg-white px-2 py-4 text-center text-sm text-gray-600 border-b flex justify-center items-center space-x-2">
+              <span>Translation: {getLanguageName(selectedSourceLanguage)} ↔ {getLanguageName(selectedTargetLanguage)}</span>
+              <button 
+                onClick={() => setIsLanguageModalOpen(true)}
+                className="text-blue-600 hover:underline text-xs ml-2"
+              >
+                Change
+              </button>
+            </div>
+          )}
+
+          {/* Main chat area */}
+          <div 
+            ref={chatContainerRef}
+            className="flex-1 overflow-y-auto p-4 space-y-4"
+          >
+            {transcriptItems.map((item) => (
+              <div
+                key={item.itemId}
+                className={`flex ${
+                  item.role === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-2xl p-3 ${
+                    item.role === "user"
+                      ? "bg-blue-500 text-white rounded-br-none"
+                      : "bg-white text-gray-800 rounded-bl-none shadow-sm"
+                  }`}
+                >
+                  {item.title || item.data?.text || ""}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Input area */}
+          <div className="border-t border-gray-200 bg-white p-4">
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={userText}
+                onChange={(e) => setUserText(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && userText.trim()) {
+                    handleSendTextMessage();
+                  }
+                }}
+                placeholder="Type a message..."
+                className="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleToggleRecording}
+                className={`rounded-full p-3 transition-all duration-300 ${
+                  isRecording
+                    ? "bg-red-500 text-white animate-pulse ring-4 ring-red-200"
+                    : "bg-blue-500 text-white hover:bg-blue-600"
+                }`}
+                aria-label={isRecording ? "Stop recording" : "Start recording"}
+                title={isRecording ? "Stop recording" : "Start recording"}
+              >
+                {isRecording ? (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Language Selection Modal */}
       <LanguageSelectionModal
