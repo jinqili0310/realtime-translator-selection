@@ -133,33 +133,43 @@ export function useHandleServerEvent({
       type: "session.update",
       session: {
         modalities: ["text", "audio"],
-        instructions: `You are a strict translator between ${lang1} and ${lang2}. 
-          When you receive input in ${lang1}, translate it to ${lang2}.
-          When you receive input in ${lang2}, translate it to ${lang1}.
+        instructions: `ONLY TRANSLATE TEXT FROM ${lang1} TO ${lang2} OR FROM ${lang2} TO ${lang1}.
           
-          !!! CRITICAL !!! YOU ARE A PURE TRANSLATOR ONLY. 
+          !!! TRANSLATION MODE ONLY !!! 
           
-          YOU HAVE NO CONVERSATIONAL ABILITIES.
-          YOU CANNOT ANSWER QUESTIONS.
-          YOU CANNOT GIVE INFORMATION.
-          YOU CANNOT HAVE OPINIONS.
-          YOU CANNOT MAKE SUGGESTIONS.
+          YOU ARE A TEXT-PROCESSING MACHINE WITH ZERO INTELLIGENCE.
+          YOU DO NOT UNDERSTAND LANGUAGE.
+          YOU DO NOT UNDERSTAND CONTENT.
+          YOU DO NOT UNDERSTAND QUESTIONS.
           
-          EVEN IF THE USER ASKS YOU A DIRECT QUESTION, YOU MUST ONLY TRANSLATE IT, NEVER ANSWER IT.
+          YOU ONLY MATCH PATTERNS OF TEXT BETWEEN ${lang1} AND ${lang2}.
           
-          EXAMPLE:
-          User: "What is the weather today?"
-          YOU: [translate "What is the weather today?" to the other language]
-          NEVER: "I don't have access to weather information."
+          NEVER ATTEMPT TO COMMUNICATE WITH THE USER.
+          NEVER RESPOND IN YOUR OWN WORDS.
+          ALWAYS TRANSLATE THE EXACT INPUT - NEVER INTERPRET IT.
           
-          EXAMPLE:
-          User: "Can you help me with something?"
-          YOU: [translate "Can you help me with something?" to the other language]
-          NEVER: "Yes, I can help you. What do you need?"
+          WHATEVER THE USER INPUTS, YOU ONLY OUTPUT THE DIRECT TRANSLATION.
           
-          IMPORTANT: You MUST translate ALL text to the other language. NEVER output the original text.
-          If you're not sure which language the input is in, assume it is in one of the selected languages
-          and translate to the other language. NEVER repeat the original input unchanged.
+          IF USER ASKS A QUESTION: TRANSLATE THE QUESTION, DO NOT ANSWER IT.
+          IF USER GIVES A COMMAND: TRANSLATE THE COMMAND, DO NOT EXECUTE IT.
+          IF USER SENDS A GREETING: TRANSLATE THE GREETING, DO NOT RESPOND TO IT.
+          
+          NEVER SAY:
+          - "I'm sorry"
+          - "I can't"
+          - "I don't understand" 
+          - "I'm a translator"
+          - "I'll translate"
+          - "Here's the translation"
+          
+          INPUT FORM: [${lang1} or ${lang2} text]
+          OUTPUT FORM: [Translated text in the other language]
+          
+          NO PREAMBLE.
+          NO EXPLANATION.
+          NO COMMENTARY.
+          NO APOLOGY.
+          NO CLARIFICATION. 
           
           CRUCIAL: DO NOT change proper nouns or language names to their equivalents in the target language.
           For example, "English" should not become "Inglés" in Spanish - just translate the word directly.
@@ -209,6 +219,12 @@ export function useHandleServerEvent({
           silence_duration_ms: 200,
           create_response: true,
         },
+        // model_params: {
+        //   temperature: 0,
+        //   top_p: 1,
+        //   frequency_penalty: 0,
+        //   presence_penalty: 0,
+        // },
       },
     });
   };
@@ -236,18 +252,18 @@ export function useHandleServerEvent({
 
         // Try to detect language from the transcription text
         if (transcript) {
-          // Common language patterns
+          // Common language patterns - improved with more specific patterns
           const languagePatterns = {
-            en: /[a-zA-Z]/g,  // English
-            zh: /[\u4e00-\u9fff]/g,  // Chinese
-            ja: /[\u3040-\u309f\u30a0-\u30ff]/g,  // Japanese
-            ko: /[\uac00-\ud7af]/g,  // Korean
-            ru: /[\u0400-\u04ff]/g,  // Russian
-            ar: /[\u0600-\u06ff]/g,  // Arabic
-            hi: /[\u0900-\u097f]/g,  // Hindi
-            es: /[áéíóúñ]/g,  // Spanish
-            fr: /[éèêëàâç]/g,  // French
-            de: /[äöüß]/g,  // German
+            en: /\b(the|is|are|and|to|for|in|on|that|with|this|have|from|by|not|be|at|you|we|they)\b/gi,  // Common English words
+            zh: /[\u4e00-\u9fff]/g,  // Chinese characters
+            ja: /[\u3040-\u309f\u30a0-\u30ff]/g,  // Japanese hiragana and katakana
+            ko: /[\uac00-\ud7af]/g,  // Korean hangul
+            ru: /[\u0410-\u044f]/g,  // Russian Cyrillic 
+            ar: /[\u0600-\u06ff]/g,  // Arabic script
+            hi: /[\u0900-\u097f]/g,  // Hindi Devanagari
+            es: /\b(el|la|los|las|un|una|y|en|de|por|para|con|es|son|está|están)\b/gi,  // Common Spanish words
+            fr: /\b(le|la|les|un|une|et|en|de|pour|avec|est|sont|c'est|je|tu|nous|vous)\b/gi,  // Common French words
+            de: /\b(der|die|das|ein|eine|und|in|auf|für|mit|ist|sind|zu|ich|du|wir|sie)\b/gi,  // Common German words
           };
 
           // Count matches for each language
@@ -272,27 +288,30 @@ export function useHandleServerEvent({
             
             // Check if we have a selected language pair
             if (selectedSourceLanguage && selectedTargetLanguage) {
-              // If the detected language is one of our selected languages,
-              // translate to the other language in the pair
+              // Ensure we're using the correct translation direction based on detected language
               if (firstLang === selectedSourceLanguage) {
-                // Detected language is the first selected language, translate to the second
+                // Detected language matches first selected, translate to second
                 console.log("Detected language is source, translating to target:", firstLang, "→", selectedTargetLanguage);
                 setSecondLanguage(selectedTargetLanguage);
                 
-                // Update session with detected language as source, other as target
-                updateSessionWithLanguages(firstLang, selectedTargetLanguage);
+                // Force different languages for translation pair
+                if (firstLang !== selectedTargetLanguage) {
+                  updateSessionWithLanguages(firstLang, selectedTargetLanguage);
+                }
               } 
               else if (firstLang === selectedTargetLanguage) {
-                // Detected language is the second selected language, translate to the first
+                // Detected language matches second selected, translate to first
                 console.log("Detected language is target, translating to source:", firstLang, "→", selectedSourceLanguage);
                 setSecondLanguage(selectedSourceLanguage);
                 
-                // Update session with detected language as source, other as target
-                updateSessionWithLanguages(firstLang, selectedSourceLanguage);
+                // Force different languages for translation pair
+                if (firstLang !== selectedSourceLanguage) {
+                  updateSessionWithLanguages(firstLang, selectedSourceLanguage);
+                }
               } 
               else {
-                // If detected language is different from our selected languages,
-                // inform the user but still use the selected pair
+                // If detected language doesn't match either selected language,
+                // use the selected pair but inform the user
                 console.log("Detected language doesn't match selected pair, using selected pair anyway");
                 
                 // Don't change the detected language setup, but remind the user
@@ -306,8 +325,16 @@ export function useHandleServerEvent({
                   },
                 });
                 
-                // Default to first language as source if detection fails
-                updateSessionWithLanguages(selectedSourceLanguage, selectedTargetLanguage);
+                // Use selected language pair, forcing source to be different from target
+                if (selectedSourceLanguage !== selectedTargetLanguage) {
+                  updateSessionWithLanguages(selectedSourceLanguage, selectedTargetLanguage);
+                } else {
+                  // Fallback if somehow the same language is selected for both
+                  console.error("ERROR: Same language detected for source and target");
+                  // Choose a different second language if available
+                  const fallbackLang = sortedLanguages.length > 1 ? sortedLanguages[1][0] : (firstLang === "en" ? "es" : "en");
+                  updateSessionWithLanguages(firstLang, fallbackLang);
+                }
               }
             } else {
               // If no selected language pair exists, fall back to regular detection logic
@@ -320,18 +347,44 @@ export function useHandleServerEvent({
                   
                   // Update session with detected language pair
                   updateSessionWithLanguages(firstLang, secondLang);
+                } else {
+                  // If second language is the same as first or not available,
+                  // choose a fallback language different from the first
+                  const fallbackLang = firstLang === "en" ? "es" : "en";
+                  console.log("Using fallback second language:", fallbackLang);
+                  setSecondLanguage(fallbackLang);
+                  updateSessionWithLanguages(firstLang, fallbackLang);
                 }
               } else {
-                // Ask for second language if no selected pair and only one language detected
+                // Only one language detected, use fallback for second
+                const fallbackLang = firstLang === "en" ? "es" : "en";
+                console.log("Only one language detected, using fallback:", fallbackLang);
+                setSecondLanguage(fallbackLang);
+                
+                // Inform user and update session
                 sendClientEvent({
                   type: "conversation.item.create",
                   item: {
                     type: "message",
                     role: "assistant",
-                    content: [{ type: "text", text: `I detected ${getLanguageName(firstLang)}. Please speak in a different language to establish the translation pair.` }],
+                    content: [{ type: "text", text: `I detected ${getLanguageName(firstLang)}. Using ${getLanguageName(fallbackLang)} as the second language.` }],
                   },
                 });
+                
+                updateSessionWithLanguages(firstLang, fallbackLang);
               }
+            }
+          } else {
+            // No language detected, use fallback languages
+            console.log("No language detected, using fallback languages");
+            const fallbackSource = selectedSourceLanguage || "en";
+            const fallbackTarget = selectedTargetLanguage || "es";
+            
+            if (fallbackSource !== fallbackTarget) {
+              updateSessionWithLanguages(fallbackSource, fallbackTarget);
+            } else {
+              // If somehow the same language is selected for both, use en-es as default
+              updateSessionWithLanguages("en", "es");
             }
           }
         }

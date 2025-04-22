@@ -35,7 +35,16 @@ export const createRealtimeConnection = async (
   // const model = "gpt-4o-realtime-preview-2024-12-17";
   const model = "gpt-4o-mini-realtime-preview-2024-12-17";
 
-  const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+  // Model parameters for strict translation with no creativity
+  const params = new URLSearchParams({
+    model,
+    // temperature: '0',
+    // top_p: '1',
+    // frequency_penalty: '0',
+    // presence_penalty: '0',
+  });
+
+  const sdpResponse = await fetch(`${baseUrl}?${params.toString()}`, {
     method: "POST",
     body: offer.sdp,
     headers: {

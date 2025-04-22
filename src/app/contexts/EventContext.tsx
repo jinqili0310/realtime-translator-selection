@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, FC, PropsWithChildren } from "react";
+import React, { createContext, useContext, useState, FC, PropsWithChildren, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { LoggedEvent } from "@/app/types";
 
@@ -16,47 +16,50 @@ const EventContext = createContext<EventContextValue | undefined>(undefined);
 export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
   const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
 
-  function addLoggedEvent(direction: "client" | "server", eventName: string, eventData: Record<string, any>) {
+  const addLoggedEvent = useCallback((direction: "client" | "server", eventName: string, eventData: Record<string, any>) => {
     const id = eventData.event_id || uuidv4();
-    setLoggedEvents((prev) => [
-      ...prev,
-      {
-        id,
-        direction,
-        eventName,
-        eventData,
-        timestamp: new Date().toLocaleTimeString(),
-        expanded: false,
-      },
-    ]);
-  }
+    const newEvent = {
+      id,
+      direction,
+      eventName,
+      eventData,
+      timestamp: new Date().toLocaleTimeString(),
+      expanded: false,
+    };
+    
+    setLoggedEvents(prev => [...prev, newEvent]);
+  }, []);
 
-  const logClientEvent: EventContextValue["logClientEvent"] = (eventObj, eventNameSuffix = "") => {
+  const logClientEvent = useCallback((eventObj: Record<string, any>, eventNameSuffix = "") => {
     const name = `${eventObj.type || ""} ${eventNameSuffix || ""}`.trim();
     addLoggedEvent("client", name, eventObj);
-  };
+  }, [addLoggedEvent]);
 
-  const logServerEvent: EventContextValue["logServerEvent"] = (eventObj, eventNameSuffix = "") => {
+  const logServerEvent = useCallback((eventObj: Record<string, any>, eventNameSuffix = "") => {
     const name = `${eventObj.type || ""} ${eventNameSuffix || ""}`.trim();
     addLoggedEvent("server", name, eventObj);
-  };
+  }, [addLoggedEvent]);
 
-  const toggleExpand: EventContextValue["toggleExpand"] = (id) => {
-    setLoggedEvents((prev) =>
-      prev.map((log) => {
+  const toggleExpand = useCallback((id: number | string) => {
+    setLoggedEvents(prev =>
+      prev.map(log => {
         if (log.id === id) {
           return { ...log, expanded: !log.expanded };
         }
         return log;
       })
     );
-  };
+  }, []);
 
+  const contextValue = React.useMemo(() => ({
+    loggedEvents,
+    logClientEvent,
+    logServerEvent,
+    toggleExpand
+  }), [loggedEvents, logClientEvent, logServerEvent, toggleExpand]);
 
   return (
-    <EventContext.Provider
-      value={{ loggedEvents, logClientEvent, logServerEvent, toggleExpand }}
-    >
+    <EventContext.Provider value={contextValue}>
       {children}
     </EventContext.Provider>
   );
