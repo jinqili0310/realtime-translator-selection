@@ -11,6 +11,7 @@ import Transcript from "./components/Transcript";
 import Events from "./components/Events";
 import BottomToolbar from "./components/BottomToolbar";
 import LanguageSelectionModal from "./components/LanguageSelectionModal";
+import AudioWaveAnimation from "./components/AudioWaveAnimation";
 
 // Types
 import { AgentConfig, SessionStatus } from "@/app/types";
@@ -1022,6 +1023,18 @@ function App() {
                 </div>
               )}
 
+              {/* Recording indicator with waveform when active */}
+              {isRecording && (
+                <div className="bg-red-50 py-2 px-4 flex items-center justify-center">
+                  <div className="animate-pulse mr-2 h-2 w-2 rounded-full bg-red-500"></div>
+                  <span className="text-red-500 text-sm font-medium">Recording</span>
+                  <AudioWaveAnimation 
+                    isRecording={isRecording} 
+                    className="ml-2"
+                  />
+                </div>
+              )}
+
               {/* Main chat area */}
               <div 
                 ref={chatContainerRef}
@@ -1144,6 +1157,13 @@ function App() {
             <div className={`mt-6 text-xl font-medium ${isRecording ? 'text-red-500' : 'text-green-500'}`}>
               {isRecording ? 'Recording...' : 'Ready to record'}
             </div>
+            
+            {/* Audio wave animation */}
+            <div className="mt-4 w-64">
+              <AudioWaveAnimation 
+                isRecording={isRecording} 
+              />
+            </div>
           </div>
         </div>
       ) : (
@@ -1159,6 +1179,18 @@ function App() {
               >
                 Change
               </button>
+            </div>
+          )}
+
+          {/* Recording indicator with waveform when active */}
+          {isRecording && (
+            <div className="bg-red-50 py-2 px-4 flex items-center justify-center">
+              <div className="animate-pulse mr-2 h-2 w-2 rounded-full bg-red-500"></div>
+              <span className="text-red-500 text-sm font-medium">Recording</span>
+              <AudioWaveAnimation 
+                isRecording={isRecording} 
+                className="ml-2"
+              />
             </div>
           )}
 
