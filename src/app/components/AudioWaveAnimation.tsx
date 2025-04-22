@@ -15,11 +15,16 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const [audioData, setAudioData] = useState<Uint8Array | null>(null);
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
+  const [recordingDuration, setRecordingDuration] = useState<number>(0);
 
   // Initialize audio analyzer
   useEffect(() => {
     // Only run this effect when recording state changes
     if (isRecording) {
+      // Set the recording start time
+      setRecordingStartTime(Date.now());
+      
       // Create Audio Context if it doesn't exist
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -44,7 +49,7 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
           
           // Create analyzer
           const analyser = audioContext.createAnalyser();
-          analyser.fftSize = 256;
+          analyser.fftSize = 128; // Smaller FFT size for simpler visualization
           analyserRef.current = analyser;
           
           // Connect source to analyzer
@@ -59,7 +64,7 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
           animationRef.current = requestAnimationFrame(updateAnimation);
         } catch (err) {
           console.error("Error accessing microphone:", err);
-          // Fallback to the original animation if we can't access the microphone
+          // Fallback to a simpler animation if we can't access the microphone
         }
       };
       
@@ -75,6 +80,10 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
         cancelAnimationFrame(animationRef.current);
       }
       
+      // Reset recording time
+      setRecordingStartTime(null);
+      setRecordingDuration(0);
+      
       // Reset audio data
       setAudioData(null);
     }
@@ -87,11 +96,6 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
       
       if (sourceRef.current) {
         sourceRef.current.disconnect();
-      }
-      
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        // Don't close the context as it might be needed again
-        // but do disconnect everything
       }
     };
   }, [isRecording]);
@@ -111,6 +115,11 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
       setAudioData(new Uint8Array(dataArray));
     }
     
+    // Update the recording duration
+    if (recordingStartTime) {
+      setRecordingDuration(Math.floor((Date.now() - recordingStartTime) / 1000));
+    }
+    
     // Continue animation loop
     animationRef.current = requestAnimationFrame(updateAnimation);
   };
@@ -123,57 +132,118 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bars = 30; // Number of bars in the wave
-    const barWidth = canvas.width / bars;
-    const barMargin = 2;
-    
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Set the dimensions
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerY = height / 2;
+    
     if (!isRecording || !audioData) {
       // When not recording, draw a flat line
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.5)'; // blue-500 with opacity
       ctx.beginPath();
-      ctx.moveTo(0, canvas.height / 2);
-      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(width, centerY);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)';
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)'; // blue-500 with opacity
       ctx.stroke();
       return;
     }
     
-    // When recording and we have audio data, draw bars based on frequency data
+    // Classic recording app style with vertical bars
+    const bars = 30; // Number of bars to display
+    const barWidth = Math.floor((width - (bars * 2)) / bars); // Width of each bar with small gap
+    const barGap = 2; // Gap between bars
+    
+    // Calculate the average of all frequency data for smoother visualization
+    let summedData = 0;
+    if (audioData) {
+      for (let i = 0; i < audioData.length; i++) {
+        summedData += audioData[i];
+      }
+    }
+    // We'll use this for the pulse effect in the background
+    const avgAmplitude = summedData / (audioData?.length || 1);
+    
+    // Add subtle pulsing background effect based on average amplitude
+    if (isRecording && avgAmplitude > 0) {
+      const normalizedAmplitude = avgAmplitude / 255; // 0-1 range
+      const pulseOpacity = 0.05 + (normalizedAmplitude * 0.1); // Subtle effect
+      
+      // Draw a subtle pulsing background
+      ctx.fillStyle = `rgba(239, 68, 68, ${pulseOpacity})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+    
+    // Draw the bars
     for (let i = 0; i < bars; i++) {
-      const x = i * (barWidth + barMargin);
+      // Calculate x position
+      const x = i * (barWidth + barGap);
       
-      // Map the frequency data to our number of bars
-      const dataIndex = Math.floor(i * (audioData.length / bars));
+      // Map the bar index to the data array
+      const dataIndex = Math.floor((i / bars) * (audioData?.length || 1));
       
-      // Get height from audio data (0-255 range)
-      let height;
+      // Get the frequency value
+      let value = 0.1; // Minimum height factor (10% of max height)
       
       if (audioData && dataIndex < audioData.length) {
-        // Scale the height based on the audio data (0-255)
-        // We want values between 20% and 90% of canvas height
-        const minHeight = canvas.height * 0.1;  // 10% of height
-        const maxHeight = canvas.height * 0.9;  // 90% of height
+        // Get normalized value (0-1)
+        const rawValue = audioData[dataIndex] / 255;
         
-        // Convert the 0-255 range to our desired height range
-        height = minHeight + ((audioData[dataIndex] / 255) * (maxHeight - minHeight));
-      } else {
-        // Fallback if no audio data
-        height = canvas.height * 0.5;
+        // Add some variation based on position for a more natural look
+        const positionFactor = 0.5 + (0.5 * Math.sin(i * 0.4));
+        
+        // Combine actual value with some randomness for a more dynamic look
+        value = Math.max(0.1, (rawValue * 0.7) + (positionFactor * 0.3));
       }
       
-      const y = (canvas.height - height) / 2;
+      // Calculate bar height based on value (25% to 90% of half height)
+      const minHeight = height * 0.25;
+      const maxHeight = height * 0.9;
+      const barHeight = minHeight + (value * (maxHeight - minHeight));
       
-      // Draw the bar with gradient color based on intensity
-      const intensity = audioData[dataIndex] / 255; // 0-1 range
-      const hue = 360 - (intensity * 60); // Range from red (0) to orange-yellow (60)
-      ctx.fillStyle = `hsla(${hue}, 100%, ${50 + (intensity * 25)}%, 0.7)`;
-      ctx.fillRect(x, y, barWidth, height);
+      // Draw mirrored bars (top and bottom from center)
+      const halfBarHeight = barHeight / 2;
+      
+      // Top bar
+      ctx.fillStyle = `rgba(239, 68, 68, ${0.7 + (value * 0.3)})`; // red-500 with dynamic opacity
+      ctx.fillRect(x, centerY - halfBarHeight, barWidth, halfBarHeight);
+      
+      // Bottom bar (slightly lighter)
+      ctx.fillStyle = `rgba(239, 68, 68, ${0.6 + (value * 0.3)})`; // red-500 with dynamic opacity
+      ctx.fillRect(x, centerY, barWidth, halfBarHeight);
     }
-  }, [audioData, isRecording]);
+    
+    // Add recording time indicator
+    if (recordingDuration > 0) {
+      const timeText = formatTime(recordingDuration);
+      ctx.font = '14px sans-serif';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      const textWidth = ctx.measureText(timeText).width;
+      const padding = 6;
+      
+      // Draw time background at the right side
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillRect(
+        width - textWidth - (padding * 2), 
+        0, 
+        textWidth + (padding * 2), 
+        24
+      );
+      
+      // Draw time text
+      ctx.fillStyle = isRecording ? 'rgba(239, 68, 68, 0.9)' : 'rgba(0, 0, 0, 0.7)';
+      ctx.fillText(timeText, width - textWidth - padding, 17);
+    }
+  }, [audioData, isRecording, recordingDuration]);
+
+  // Format seconds into mm:ss
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className={`w-full ${className}`}>
