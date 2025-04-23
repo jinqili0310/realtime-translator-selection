@@ -133,7 +133,10 @@ export function useHandleServerEvent({
       type: "session.update",
       session: {
         modalities: ["text", "audio"],
-        instructions: `ONLY TRANSLATE TEXT FROM ${lang1} TO ${lang2} OR FROM ${lang2} TO ${lang1}.
+        instructions: `
+        You will always be given a piece of text and a detected input language. 
+
+        ONLY TRANSLATE TEXT FROM ${lang1} TO ${lang2} OR FROM ${lang2} TO ${lang1}.
           
           !!! TRANSLATION MODE ONLY !!! 
           
@@ -320,7 +323,8 @@ export function useHandleServerEvent({
                   type: "conversation.item.create",
                   item: {
                     type: "message",
-                    role: "assistant",
+                    // role: "assistant",
+                    role: "system",
                     content: [{ type: "text", text: `Note: I detected ${getLanguageName(firstLang)}, which is not in your selected language pair. I will translate between ${getLanguageName(selectedSourceLanguage)} and ${getLanguageName(selectedTargetLanguage)} based on language detection.` }],
                   },
                 });
@@ -366,7 +370,8 @@ export function useHandleServerEvent({
                   type: "conversation.item.create",
                   item: {
                     type: "message",
-                    role: "assistant",
+                    // role: "assistant",
+                    role: "system",
                     content: [{ type: "text", text: `I detected ${getLanguageName(firstLang)}. Using ${getLanguageName(fallbackLang)} as the second language.` }],
                   },
                 });

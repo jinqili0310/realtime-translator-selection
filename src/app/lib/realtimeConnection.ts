@@ -38,10 +38,10 @@ export const createRealtimeConnection = async (
   // Model parameters for strict translation with no creativity
   const params = new URLSearchParams({
     model,
-    // temperature: '0',
-    // top_p: '1',
-    // frequency_penalty: '0',
-    // presence_penalty: '0',
+    temperature: '0',
+    top_p: '1',
+    frequency_penalty: '0',
+    presence_penalty: '0',
   });
 
   const sdpResponse = await fetch(`${baseUrl}?${params.toString()}`, {

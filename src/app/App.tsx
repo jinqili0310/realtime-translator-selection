@@ -178,7 +178,15 @@ function App() {
             selectedSourceLanguage, selectedTargetLanguage);
             
           // Update the agent's instructions with the selected languages
-          updatedAgent.instructions = `ONLY TRANSLATE TEXT FROM ${selectedSourceLanguage} TO ${selectedTargetLanguage} OR FROM ${selectedTargetLanguage} TO ${selectedSourceLanguage}.
+          updatedAgent.instructions = `
+            You will always be given a piece of text and a detected input language. 
+            Your job is to translate it into the **other language** in the language pair: ${selectedSourceLanguage} <-> ${selectedTargetLanguage}.
+
+            DO NOT output text in the same language as the input.
+            If the input is in ${selectedSourceLanguage}, your output MUST be in ${selectedTargetLanguage}.
+            If the input is in ${selectedTargetLanguage}, your output MUST be in ${selectedSourceLanguage}.
+
+            ONLY TRANSLATE TEXT FROM ${selectedSourceLanguage} TO ${selectedTargetLanguage} OR FROM ${selectedTargetLanguage} TO ${selectedSourceLanguage}.
             
             !!! TRANSLATION MODE ONLY !!! 
             
@@ -358,7 +366,15 @@ function App() {
               sourceLang, targetLang);
               
             // Update the agent's instructions with the selected languages
-            updatedAgent.instructions = `ONLY TRANSLATE TEXT FROM ${sourceLang} TO ${targetLang} OR FROM ${targetLang} TO ${sourceLang}.
+            updatedAgent.instructions = `
+            You will always be given a piece of text and a detected input language. 
+            Your job is to translate it into the **other language** in the language pair: ${sourceLang} <-> ${targetLang}.
+
+            DO NOT output text in the same language as the input.
+            If the input is in ${sourceLang}, your output MUST be in ${targetLang}.
+            If the input is in ${targetLang}, your output MUST be in ${sourceLang}.
+
+            ONLY TRANSLATE TEXT FROM ${sourceLang} TO ${targetLang} OR FROM ${targetLang} TO ${sourceLang}.
             
              !!! TRANSLATION MODE ONLY !!! 
              
@@ -465,7 +481,8 @@ function App() {
         type: "conversation.item.create",
         item: {
           type: "message",
-          role: "assistant",
+          // role: "assistant",
+          role: "system",
           content: [{ type: "text", text: `Language pair updated: now ready to translate between ${getLanguageName(sourceLang)} and ${getLanguageName(targetLang)}.` }],
         },
       });
@@ -617,7 +634,15 @@ function App() {
     let translationInstructions = "";
     
     if (sourceLang && targetLang) {
-      translationInstructions = `ONLY TRANSLATE TEXT FROM ${sourceLang} TO ${targetLang} OR FROM ${targetLang} TO ${sourceLang}.
+      translationInstructions = `
+      You will always be given a piece of text and a detected input language. 
+      Your job is to translate it into the **other language** in the language pair: ${sourceLang} <-> ${targetLang}.
+
+      DO NOT output text in the same language as the input.
+      If the input is in ${sourceLang}, your output MUST be in ${targetLang}.
+      If the input is in ${targetLang}, your output MUST be in ${sourceLang}.
+      
+      ONLY TRANSLATE TEXT FROM ${sourceLang} TO ${targetLang} OR FROM ${targetLang} TO ${sourceLang}.
           
          !!! TRANSLATION MODE ONLY !!! 
          
@@ -707,7 +732,15 @@ function App() {
     } else if (selectedSourceLanguage && selectedTargetLanguage) {
       // If we have selected languages but haven't detected any yet,
       // set up bidirectional translation
-      translationInstructions = `ONLY TRANSLATE TEXT FROM ${selectedSourceLanguage} TO ${selectedTargetLanguage} OR FROM ${selectedTargetLanguage} TO ${selectedSourceLanguage}.
+      translationInstructions = `
+      You will always be given a piece of text and a detected input language. 
+      Your job is to translate it into the **other language** in the language pair: ${selectedSourceLanguage} <-> ${selectedTargetLanguage}.
+
+      DO NOT output text in the same language as the input.
+      If the input is in ${selectedSourceLanguage}, your output MUST be in ${selectedTargetLanguage}.
+      If the input is in ${selectedTargetLanguage}, your output MUST be in ${selectedSourceLanguage}.
+
+      ONLY TRANSLATE TEXT FROM ${selectedSourceLanguage} TO ${selectedTargetLanguage} OR FROM ${selectedTargetLanguage} TO ${selectedSourceLanguage}.
           
          !!! TRANSLATION MODE ONLY !!! 
          
@@ -828,7 +861,8 @@ function App() {
           type: "conversation.item.create",
           item: {
             type: "message",
-            role: "assistant",
+            // role: "assistant",
+            role: "system",
             content: [{ type: "text", text: `Ready to translate between ${getLanguageName(selectedSourceLanguage)} and ${getLanguageName(selectedTargetLanguage)}.` }],
           },
         });
