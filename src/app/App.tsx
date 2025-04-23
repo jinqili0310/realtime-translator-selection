@@ -30,16 +30,16 @@ import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
 // Language utilities
 const getLanguageName = (code: string): string => {
   const languages: {[key: string]: string} = {
-    en: "English",
-    zh: "Chinese",
-    ja: "Japanese",
-    ko: "Korean",
-    ru: "Russian",
-    ar: "Arabic",
-    hi: "Hindi",
-    es: "Spanish",
-    fr: "French",
-    de: "German"
+    English: "English",
+    Chinese: "Chinese",
+    Japanese: "Japanese",
+    Korean: "Korean",
+    Russian: "Russian",
+    Arabic: "Arabic",
+    Hindi: "Hindi",
+    Spanish: "Spanish",
+    French: "French",
+    German: "German"
   };
   return languages[code] || code;
 };
@@ -840,7 +840,9 @@ function App() {
         voice: "shimmer",
         input_audio_format: "pcm16",
         output_audio_format: "pcm16",
-        input_audio_transcription: { model: "whisper-1" },
+        input_audio_transcription: { 
+          model: "whisper-1",
+        },
         turn_detection: turnDetection,
         tools,
         // model_params: {
@@ -917,38 +919,72 @@ function App() {
   };
 
   const handleStartRecording = () => {
-    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open")
+    console.log("handleStartRecording called", {
+      sessionStatus,
+      dataChannelState: dataChannel?.readyState,
+      isRecording
+    });
+    
+    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open") {
+      console.log("Cannot start recording - not connected", {
+        sessionStatus,
+        dataChannelState: dataChannel?.readyState
+      });
       return;
+    }
+    
     cancelAssistantSpeech();
 
     // Enable the audio track
     if (audioTrackRef.current) {
+      console.log("Enabling audio track");
       audioTrackRef.current.enabled = true;
+    } else {
+      console.log("No audio track ref available");
     }
 
     setIsRecording(true);
     sendClientEvent({ type: "input_audio_buffer.clear" }, "clear recording buffer");
+    console.log("Recording started successfully");
   };
 
   const handleStopRecording = () => {
+    console.log("handleStopRecording called", {
+      sessionStatus,
+      dataChannelState: dataChannel?.readyState,
+      isRecording
+    });
+    
     if (
       sessionStatus !== "CONNECTED" ||
       dataChannel?.readyState !== "open" ||
       !isRecording
-    )
+    ) {
+      console.log("Cannot stop recording - not in recording state", {
+        sessionStatus,
+        dataChannelState: dataChannel?.readyState,
+        isRecording
+      });
       return;
+    }
 
     // Disable the audio track
     if (audioTrackRef.current) {
+      console.log("Disabling audio track");
       audioTrackRef.current.enabled = false;
+    } else {
+      console.log("No audio track ref available");
     }
 
     setIsRecording(false);
+    
     sendClientEvent({ type: "input_audio_buffer.commit" }, "commit recording");
     sendClientEvent({ type: "response.create" }, "trigger response recording");
+    console.log("Recording stopped successfully");
   };
 
   const handleToggleRecording = () => {
+    console.log("handleToggleRecording called", { isRecording });
     if (isRecording) {
       handleStopRecording();
     } else {
@@ -1057,18 +1093,6 @@ function App() {
                 </div>
               )}
 
-              {/* Recording indicator with waveform when active */}
-              {isRecording && (
-                <div className="bg-red-50 py-2 px-4 flex items-center justify-center">
-                  <div className="animate-pulse mr-2 h-2 w-2 rounded-full bg-red-500"></div>
-                  <span className="text-red-500 text-sm font-medium">Recording</span>
-                  <AudioWaveAnimation 
-                    isRecording={isRecording} 
-                    className="ml-2"
-                  />
-                </div>
-              )}
-
               {/* Main chat area */}
               <div 
                 ref={chatContainerRef}
@@ -1094,35 +1118,21 @@ function App() {
                 ))}
               </div>
 
-              {/* Input area */}
+              {/* Input area - redesigned with voice memo style */}
               <div className="border-t border-gray-200 bg-white p-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={userText}
-                    onChange={(e) => setUserText(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter" && userText.trim()) {
-                        handleSendTextMessage();
-                      }
-                    }}
-                    placeholder="Type a message..."
-                    className="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    onClick={handleToggleRecording}
-                    className={`rounded-full p-3 transition-all duration-300 ${
-                      isRecording
-                        ? "bg-red-500 text-white animate-pulse ring-4 ring-red-200"
-                        : "bg-blue-500 text-white hover:bg-blue-600"
-                    }`}
-                    aria-label={isRecording ? "Stop recording" : "Start recording"}
-                    title={isRecording ? "Stop recording" : "Start recording"}
-                  >
-                    {isRecording ? (
+                {isRecording ? (
+                  /* Audio wave animation when recording */
+                  <div className="flex items-center">
+                    <AudioWaveAnimation isRecording={isRecording} className="flex-1" />
+                    <button
+                      onClick={handleToggleRecording}
+                      className="ml-2 p-3 bg-red-600 rounded-full shadow-md transition-all duration-300"
+                      aria-label="Stop recording"
+                      title="Stop recording"
+                    >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        className="h-6 w-6"
+                        className="h-6 w-6 text-white"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -1140,7 +1150,29 @@ function App() {
                           d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
                         />
                       </svg>
-                    ) : (
+                    </button>
+                  </div>
+                ) : (
+                  /* Text input when not recording */
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={userText}
+                      onChange={(e) => setUserText(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter" && userText.trim()) {
+                          handleSendTextMessage();
+                        }
+                      }}
+                      placeholder="Type a message..."
+                      className="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={handleToggleRecording}
+                      className="rounded-full p-3 bg-red-600 text-white transition-all duration-300"
+                      aria-label="Start recording"
+                      title="Start recording"
+                    >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="h-6 w-6"
@@ -1155,9 +1187,9 @@ function App() {
                           d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
                         />
                       </svg>
-                    )}
-                  </button>
-                </div>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -1170,20 +1202,46 @@ function App() {
             <div className="text-white text-2xl mb-10 font-light">Click the microphone to toggle recording</div>
             <button
               onClick={handleToggleRecording}
-              className={`transition-all duration-300 transform ${isRecording ? 'scale-110 animate-pulse' : 'hover:scale-105'}`}
+              className={`transition-all duration-300 transform ${isRecording ? 'scale-110' : 'hover:scale-105'}`}
               aria-label={isRecording ? "Stop recording" : "Start recording"}
             >
-              <div className={`relative`}>
-                <img 
-                  src="/mic01.png" 
-                  alt="Microphone" 
-                  width={200} 
-                  height={200} 
-                  className="rounded-full"
-                />
+              <div className="relative">
+                <div className={`rounded-full p-10 ${isRecording ? 'bg-red-600' : 'bg-red-500'} shadow-lg`}>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-16 w-16 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    {isRecording ? (
+                      <>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+                        />
+                      </>
+                    ) : (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                      />
+                    )}
+                  </svg>
+                </div>
                 {isRecording && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-16 h-16 rounded-full opacity-30 animate-ping"></div>
+                    <div className="w-full h-full rounded-full border-4 border-red-200 opacity-30 animate-ping"></div>
                   </div>
                 )}
               </div>
@@ -1193,11 +1251,11 @@ function App() {
             </div>
             
             {/* Audio wave animation */}
-            <div className="mt-4 w-64">
-              <AudioWaveAnimation 
-                isRecording={isRecording} 
-              />
-            </div>
+            {isRecording && (
+              <div className="mt-4 w-64">
+                <AudioWaveAnimation isRecording={isRecording} />
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -1213,18 +1271,6 @@ function App() {
               >
                 Change
               </button>
-            </div>
-          )}
-
-          {/* Recording indicator with waveform when active */}
-          {isRecording && (
-            <div className="bg-red-50 py-2 px-4 flex items-center justify-center">
-              <div className="animate-pulse mr-2 h-2 w-2 rounded-full bg-red-500"></div>
-              <span className="text-red-500 text-sm font-medium">Recording</span>
-              <AudioWaveAnimation 
-                isRecording={isRecording} 
-                className="ml-2"
-              />
             </div>
           )}
 
@@ -1253,35 +1299,21 @@ function App() {
             ))}
           </div>
 
-          {/* Input area */}
+          {/* Input area - Redesigned to show waveform when recording */}
           <div className="border-t border-gray-200 bg-white p-4">
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={userText}
-                onChange={(e) => setUserText(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && userText.trim()) {
-                    handleSendTextMessage();
-                  }
-                }}
-                placeholder="Type a message..."
-                className="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={handleToggleRecording}
-                className={`rounded-full p-3 transition-all duration-300 ${
-                  isRecording
-                    ? "bg-red-500 text-white animate-pulse ring-4 ring-red-200"
-                    : "bg-blue-500 text-white hover:bg-blue-600"
-                }`}
-                aria-label={isRecording ? "Stop recording" : "Start recording"}
-                title={isRecording ? "Stop recording" : "Start recording"}
-              >
-                {isRecording ? (
+            {isRecording ? (
+              /* Audio wave animation container */
+              <div className="flex items-center">
+                <AudioWaveAnimation isRecording={isRecording} className="flex-1" />
+                <button
+                  onClick={handleToggleRecording}
+                  className="ml-2 p-3 bg-red-600 rounded-full shadow-md transition-all duration-300"
+                  aria-label="Stop recording"
+                  title="Stop recording"
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6"
+                    className="h-6 w-6 text-white"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -1299,7 +1331,29 @@ function App() {
                       d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
                     />
                   </svg>
-                ) : (
+                </button>
+              </div>
+            ) : (
+              /* Text input when not recording */
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={userText}
+                  onChange={(e) => setUserText(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && userText.trim()) {
+                      handleSendTextMessage();
+                    }
+                  }}
+                  placeholder="Type a message..."
+                  className="flex-1 rounded-full border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={handleToggleRecording}
+                  className="rounded-full p-3 bg-red-600 text-white transition-all duration-300"
+                  aria-label="Start recording"
+                  title="Start recording"
+                >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     className="h-6 w-6"
@@ -1314,9 +1368,9 @@ function App() {
                       d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
                     />
                   </svg>
-                )}
-              </button>
-            </div>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

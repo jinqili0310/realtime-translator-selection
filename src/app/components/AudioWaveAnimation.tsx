@@ -146,95 +146,53 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
       ctx.moveTo(0, centerY);
       ctx.lineTo(width, centerY);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)'; // blue-500 with opacity
+      ctx.strokeStyle = 'rgba(220, 38, 38, 0.5)'; // red-600 with opacity
       ctx.stroke();
       return;
     }
     
-    // Classic recording app style with vertical bars
-    const bars = 30; // Number of bars to display
-    const barWidth = Math.floor((width - (bars * 2)) / bars); // Width of each bar with small gap
+    // iPhone Voice Memo style waveform
+    const barWidth = 3; // Width of each bar
     const barGap = 2; // Gap between bars
+    const bars = Math.floor(width / (barWidth + barGap)); // Number of bars that fit the canvas
     
-    // Calculate the average of all frequency data for smoother visualization
-    let summedData = 0;
-    if (audioData) {
-      for (let i = 0; i < audioData.length; i++) {
-        summedData += audioData[i];
-      }
-    }
-    // We'll use this for the pulse effect in the background
-    const avgAmplitude = summedData / (audioData?.length || 1);
+    ctx.fillStyle = 'rgba(220, 38, 38, 0.9)'; // Single red color (red-600)
     
-    // Add subtle pulsing background effect based on average amplitude
-    if (isRecording && avgAmplitude > 0) {
-      const normalizedAmplitude = avgAmplitude / 255; // 0-1 range
-      const pulseOpacity = 0.05 + (normalizedAmplitude * 0.1); // Subtle effect
-      
-      // Draw a subtle pulsing background
-      ctx.fillStyle = `rgba(239, 68, 68, ${pulseOpacity})`;
-      ctx.fillRect(0, 0, width, height);
-    }
-    
-    // Draw the bars
     for (let i = 0; i < bars; i++) {
-      // Calculate x position
       const x = i * (barWidth + barGap);
       
       // Map the bar index to the data array
       const dataIndex = Math.floor((i / bars) * (audioData?.length || 1));
       
-      // Get the frequency value
-      let value = 0.1; // Minimum height factor (10% of max height)
+      // Get the amplitude value (0-1)
+      let amplitude = 0.1; // Minimum amplitude
       
       if (audioData && dataIndex < audioData.length) {
-        // Get normalized value (0-1)
-        const rawValue = audioData[dataIndex] / 255;
+        // Normalize value (0-1)
+        amplitude = audioData[dataIndex] / 255;
         
-        // Add some variation based on position for a more natural look
-        const positionFactor = 0.5 + (0.5 * Math.sin(i * 0.4));
-        
-        // Combine actual value with some randomness for a more dynamic look
-        value = Math.max(0.1, (rawValue * 0.7) + (positionFactor * 0.3));
+        // Add slight randomness for more natural look
+        const jitter = Math.random() * 0.1;
+        amplitude = Math.max(0.1, (amplitude * 0.8) + jitter);
       }
       
-      // Calculate bar height based on value (25% to 90% of half height)
-      const minHeight = height * 0.25;
-      const maxHeight = height * 0.9;
-      const barHeight = minHeight + (value * (maxHeight - minHeight));
+      // Calculate the bar height
+      const maxBarHeight = height * 0.8; // 80% of canvas height
+      const barHeight = maxBarHeight * amplitude;
       
-      // Draw mirrored bars (top and bottom from center)
-      const halfBarHeight = barHeight / 2;
-      
-      // Top bar
-      ctx.fillStyle = `rgba(239, 68, 68, ${0.7 + (value * 0.3)})`; // red-500 with dynamic opacity
-      ctx.fillRect(x, centerY - halfBarHeight, barWidth, halfBarHeight);
-      
-      // Bottom bar (slightly lighter)
-      ctx.fillStyle = `rgba(239, 68, 68, ${0.6 + (value * 0.3)})`; // red-500 with dynamic opacity
-      ctx.fillRect(x, centerY, barWidth, halfBarHeight);
+      // Draw the bar from center
+      const startY = centerY - (barHeight / 2);
+      ctx.fillRect(x, startY, barWidth, barHeight);
     }
     
-    // Add recording time indicator
+    // Add recording time indicator (iPhone style)
     if (recordingDuration > 0) {
       const timeText = formatTime(recordingDuration);
-      ctx.font = '14px sans-serif';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      const textWidth = ctx.measureText(timeText).width;
-      const padding = 6;
+      ctx.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = 'rgba(220, 38, 38, 0.9)'; // red-600
       
-      // Draw time background at the right side
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.fillRect(
-        width - textWidth - (padding * 2), 
-        0, 
-        textWidth + (padding * 2), 
-        24
-      );
-      
-      // Draw time text
-      ctx.fillStyle = isRecording ? 'rgba(239, 68, 68, 0.9)' : 'rgba(0, 0, 0, 0.7)';
-      ctx.fillText(timeText, width - textWidth - padding, 17);
+      // Draw time text at the left side
+      ctx.fillText(timeText, 10, height / 2 + 5);
     }
   }, [audioData, isRecording, recordingDuration]);
 
@@ -246,12 +204,12 @@ const AudioWaveAnimation: React.FC<AudioWaveAnimationProps> = ({ isRecording, cl
   };
 
   return (
-    <div className={`w-full ${className}`}>
+    <div className={`relative w-full ${className}`}>
       <canvas 
-        ref={canvasRef} 
-        width={300} 
-        height={60} 
-        className="w-full h-full"
+        ref={canvasRef}
+        className="w-full h-12"
+        width={500}
+        height={60}
       />
     </div>
   );

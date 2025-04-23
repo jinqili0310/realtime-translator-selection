@@ -16,24 +16,24 @@ interface Language {
 }
 
 const LANGUAGES: Language[] = [
-  { code: "en", name: "English" },
-  { code: "zh", name: "Chinese" },
-  { code: "ja", name: "Japanese" },
-  { code: "ko", name: "Korean" },
-  { code: "ru", name: "Russian" },
-  { code: "ar", name: "Arabic" },
-  { code: "hi", name: "Hindi" },
-  { code: "es", name: "Spanish" },
-  { code: "fr", name: "French" },
-  { code: "de", name: "German" },
+  { code: "English", name: "English" },
+  { code: "Chinese", name: "Chinese" },
+  { code: "Japanese", name: "Japanese" },
+  { code: "Korean", name: "Korean" },
+  { code: "Russian", name: "Russian" },
+  { code: "Arabic", name: "Arabic" },
+  { code: "Hindi", name: "Hindi" },
+  { code: "Spanish", name: "Spanish" },
+  { code: "French", name: "French" },
+  { code: "German", name: "German" },
 ];
 
 export default function LanguageSelectionModal({
   isOpen,
   onClose,
   onSave,
-  initialSourceLanguage = "en",
-  initialTargetLanguage = "es",
+  initialSourceLanguage = "English",
+  initialTargetLanguage = "Spanish",
 }: LanguageSelectionModalProps) {
   const [firstLanguage, setFirstLanguage] = useState(initialSourceLanguage);
   const [secondLanguage, setSecondLanguage] = useState(initialTargetLanguage);

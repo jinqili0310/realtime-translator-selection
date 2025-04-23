@@ -7,16 +7,16 @@ import { useEvent } from "@/app/contexts/EventContext";
 // Language utilities
 const getLanguageName = (code: string): string => {
   const languages: {[key: string]: string} = {
-    en: "English",
-    zh: "Chinese",
-    ja: "Japanese",
-    ko: "Korean",
-    ru: "Russian",
-    ar: "Arabic",
-    hi: "Hindi",
-    es: "Spanish",
-    fr: "French",
-    de: "German"
+    English: "English",
+    Chinese: "Chinese",
+    Japanese: "Japanese",
+    Korean: "Korean",
+    Russian: "Russian",
+    Arabic: "Arabic",
+    Hindi: "Hindi",
+    Spanish: "Spanish",
+    French: "French",
+    German: "German"
   };
   return languages[code] || code;
 };
@@ -214,7 +214,9 @@ export function useHandleServerEvent({
         voice: "shimmer",
         input_audio_format: "pcm16",
         output_audio_format: "pcm16",
-        input_audio_transcription: { model: "whisper-1" },
+        input_audio_transcription: { 
+          model: "whisper-1",
+        },
         turn_detection: {
           type: "server_vad",
           threshold: 0.5,
@@ -257,16 +259,16 @@ export function useHandleServerEvent({
         if (transcript) {
           // Common language patterns - improved with more specific patterns
           const languagePatterns = {
-            en: /\b(the|is|are|and|to|for|in|on|that|with|this|have|from|by|not|be|at|you|we|they)\b/gi,  // Common English words
-            zh: /[\u4e00-\u9fff]/g,  // Chinese characters
-            ja: /[\u3040-\u309f\u30a0-\u30ff]/g,  // Japanese hiragana and katakana
-            ko: /[\uac00-\ud7af]/g,  // Korean hangul
-            ru: /[\u0410-\u044f]/g,  // Russian Cyrillic 
-            ar: /[\u0600-\u06ff]/g,  // Arabic script
-            hi: /[\u0900-\u097f]/g,  // Hindi Devanagari
-            es: /\b(el|la|los|las|un|una|y|en|de|por|para|con|es|son|está|están)\b/gi,  // Common Spanish words
-            fr: /\b(le|la|les|un|une|et|en|de|pour|avec|est|sont|c'est|je|tu|nous|vous)\b/gi,  // Common French words
-            de: /\b(der|die|das|ein|eine|und|in|auf|für|mit|ist|sind|zu|ich|du|wir|sie)\b/gi,  // Common German words
+            English: /\b(the|is|are|and|to|for|in|on|that|with|this|have|from|by|not|be|at|you|we|they)\b/gi,  // Common English words
+            Chinese: /[\u4e00-\u9fff]/g,  // Chinese characters
+            Japanese: /[\u3040-\u309f\u30a0-\u30ff]/g,  // Japanese hiragana and katakana
+            Korean: /[\uac00-\ud7af]/g,  // Korean hangul
+            Russian: /[\u0410-\u044f]/g,  // Russian Cyrillic 
+            Arabic: /[\u0600-\u06ff]/g,  // Arabic script
+            Hindi: /[\u0900-\u097f]/g,  // Hindi Devanagari
+            Spanish: /\b(el|la|los|las|un|una|y|en|de|por|para|con|es|son|está|están)\b/gi,  // Common Spanish words
+            French: /\b(le|la|les|un|une|et|en|de|pour|avec|est|sont|c'est|je|tu|nous|vous)\b/gi,  // Common French words
+            German: /\b(der|die|das|ein|eine|und|in|auf|für|mit|ist|sind|zu|ich|du|wir|sie)\b/gi,  // Common German words
           };
 
           // Count matches for each language
