@@ -2,7 +2,10 @@
 
 A powerful application that translates spoken language in real-time using OpenAI's advanced AI models. Convert speech from one language to another instantly with high accuracy.
 
-![Translator Demo](./public/translator.png)
+### Translator Demo
+- ![Translator Demo](./public/translator.png)
+- [Try Live Demo](https://realtime-translator-selection.vercel.app/)
+- [Watch Demo Video](https://vimeo.com/1078430059)
 
 ## Features
 
@@ -12,10 +15,6 @@ A powerful application that translates spoken language in real-time using OpenAI
 - Simple and intuitive user interface
 - Support for continuous conversations
 - Zero-latency translation experience
-
-## Demo
-
-See the translator in action: [Watch Demo Video](https://vimeo.com/1078430059?share=copy#t=0)
 
 ## Usage
 
