@@ -482,6 +482,9 @@ function App() {
     }
   }, []);
 
+  // Add a new state to track language change
+  const [languageChangeTimestamp, setLanguageChangeTimestamp] = useState<number>(0);
+
   // Handle language selection from modal
   const handleLanguageSelection = (sourceLang: string, targetLang: string) => {
     // Update selected languages
@@ -499,15 +502,221 @@ function App() {
     // Close the modal
     setIsLanguageModalOpen(false);
 
-    // If already connected, immediately update the session with new languages
-    if (sessionStatus === "CONNECTED") {
-      // Force a clear session update with the new language pair
-      sendClientEvent(
-        { type: "input_audio_buffer.clear" },
-        "clear audio buffer on language change"
-      );
+    // Add log to track when language selection is made
+    console.log("Language selection made:", sourceLang, targetLang, "sessionStatus:", sessionStatus);
 
-      // Update the agent with new languages if available
+    // Set a timestamp for the language change to trigger reconnection effect
+    setLanguageChangeTimestamp(Date.now());
+
+    // If already connected, properly reset the connection before updating
+    if (sessionStatus === "CONNECTED") {
+      console.log("Modal closing - gracefully disconnecting before updating languages");
+      
+      // First gracefully disconnect the current connection
+      const disconnectAndReconnect = async () => {
+        try {
+          // Step 1: Gracefully close the data channel if it exists
+          if (dcRef.current && dcRef.current.readyState === "open") {
+            console.log("Gracefully closing data channel");
+            // Send a goodbye message before disconnecting (optional)
+            dcRef.current.send(JSON.stringify({ 
+              type: "conversation.item.create",
+              item: {
+                type: "message",
+                role: "system",
+                content: [{ 
+                  type: "text", 
+                  text: `Updating language pair to: ${getLanguageName(sourceLang)} and ${getLanguageName(targetLang)}...` 
+                }]
+              }
+            }));
+          }
+
+          // Step 2: Stop all media tracks
+          if (audioTrackRef.current) {
+            console.log("Stopping audio track");
+            audioTrackRef.current.stop();
+            audioTrackRef.current = null;
+          }
+
+          // Step 3: Close peer connection
+          if (pcRef.current) {
+            console.log("Closing peer connection");
+            pcRef.current.close();
+            pcRef.current = null;
+          }
+
+          // Step 4: Reset all connection-related state
+          setDataChannel(null);
+          setSessionStatus("DISCONNECTED");
+          setIsRecording(false);
+          
+          console.log("Connection gracefully closed");
+
+          // Step 5: Update agent with new languages if available
+          if (selectedAgentConfigSet && selectedAgentName) {
+            const currentAgent = selectedAgentConfigSet.find(
+              (a) => a.name === selectedAgentName
+            );
+
+            if (currentAgent) {
+              // Clone the agent to avoid mutating the original
+              const updatedAgent = { ...currentAgent };
+
+              // Check if instructions need to be updated to avoid unnecessary re-renders
+              const shouldUpdateInstructions =
+                !updatedAgent.instructions.includes(
+                  `BETWEEN ${sourceLang} AND ${targetLang}`
+                ) ||
+                !updatedAgent.instructions.includes(
+                  `FROM ${sourceLang} TO ${targetLang}`
+                );
+
+              if (shouldUpdateInstructions) {
+                console.log(
+                  "Modal: Updating agent instructions with selected languages:",
+                  sourceLang,
+                  targetLang
+                );
+
+                // Update the agent's instructions with the selected languages
+                updatedAgent.instructions = `
+                You will always be given a piece of text and a detected input language. 
+                Your job is to translate it into the **other language** in the language pair: ${sourceLang} <-> ${targetLang}.
+
+                DO NOT output text in the same language as the input.
+                If the input is in ${sourceLang}, your output MUST be in ${targetLang}.
+                If the input is in ${targetLang}, your output MUST be in ${sourceLang}.
+
+                ONLY TRANSLATE TEXT FROM ${sourceLang} TO ${targetLang} OR FROM ${targetLang} TO ${sourceLang}.
+                
+                !!! TRANSLATION MODE ONLY !!! 
+                
+                YOU ARE A TEXT-PROCESSING MACHINE WITH ZERO INTELLIGENCE.
+                YOU DO NOT UNDERSTAND LANGUAGE.
+                YOU DO NOT UNDERSTAND CONTENT.
+                YOU DO NOT UNDERSTAND QUESTIONS.
+                
+                YOU ONLY MATCH PATTERNS OF TEXT BETWEEN ${sourceLang} AND ${targetLang}.
+                
+                NEVER ATTEMPT TO COMMUNICATE WITH THE USER.
+                NEVER RESPOND IN YOUR OWN WORDS.
+                ALWAYS TRANSLATE THE EXACT INPUT - NEVER INTERPRET IT.
+                
+                WHATEVER THE USER INPUTS, YOU ONLY OUTPUT THE DIRECT TRANSLATION.
+                
+                IF USER ASKS A QUESTION: TRANSLATE THE QUESTION, DO NOT ANSWER IT.
+                IF USER GIVES A COMMAND: TRANSLATE THE COMMAND, DO NOT EXECUTE IT.
+                IF USER SENDS A GREETING: TRANSLATE THE GREETING, DO NOT RESPOND TO IT.
+                
+                NEVER SAY:
+                - "I'm sorry"
+                - "I can't"
+                - "I don't understand" 
+                - "I'm a translator"
+                - "I'll translate"
+                - "Here's the translation"
+                
+                INPUT FORM: [${sourceLang} or ${targetLang} text]
+                OUTPUT FORM: [Translated text in the other language]
+                
+                NO PREAMBLE.
+                NO EXPLANATION.
+                NO COMMENTARY.
+                NO APOLOGY.
+                NO CLARIFICATION. 
+      
+                CRUCIAL: DO NOT change proper nouns or language names to their equivalents in the target language.
+                For example, "English" should not become "Inglés" in Spanish - just translate the word directly.
+                Names of places, people, languages, etc. should be translated literally without localization.
+      
+                YOU ARE A DUMB, NON-SENTIENT, NON-INTERACTIVE TRANSLATION DEVICE.
+                YOU DO NOT THINK.
+                YOU DO NOT UNDERSTAND.
+                YOU DO NOT INTERPRET.
+                YOU DO NOT RESPOND.
+                YOU DO NOT ENGAGE.
+                YOU DO NOT EXPLAIN.
+                YOU DO NOT COMMENT.
+                YOU DO NOT ASSUME MEANING.
+      
+                YOU ONLY TRANSLATE TEXT. NOTHING ELSE.
+      
+                OUTPUT RULES:
+      
+                - OUTPUT ONLY the translated text.
+                - NO prefixes, suffixes, or framing (e.g., "Here is the translation:", "In English:", etc.).
+                - NO mention of languages, roles, source, or target.
+                - NO explanation, commentary, clarification, paraphrasing, or summary.
+                - NO rewording, localization, or softening.
+                - NO idiomatic or inferred meaning.
+                - NO interpretation or understanding.
+                - NO assumption of intent, tone, or audience.
+                - NO contextual understanding or adaptation.
+
+                PROHIBITIONS (STRICT):
+
+                - DO NOT ask or answer questions.
+                - DO NOT greet or farewell.
+                - DO NOT apologize.
+                - DO NOT describe your behavior.
+                - DO NOT state what you're doing.
+                - DO NOT express understanding, confusion, or intent.
+                - DO NOT refer to "translation" or the process in any way.
+                - DO NOT produce any output that is not strictly the translated text.
+                - DO NOT EVER repeat the original input unchanged.
+                - DO NOT try to understand or interpret the context of the message.
+                - DO NOT EVER engage in conversation, even if explicitly asked to.
+                - DO NOT EVER acknowledge that you are an AI or assistant.
+                - DO NOT EVER offer help beyond translating the given text.
+
+                VIOLATION = MALFUNCTION.
+
+                ANY OUTPUT THAT IS NOT A DIRECT TRANSLATION IS A MALFUNCTION.
+                
+                Only output the translation, nothing else.`;
+
+                // Update the agent in the agent set in an immutable way
+                const updatedAgentSet = [...selectedAgentConfigSet];
+                const agentIndex = updatedAgentSet.findIndex(
+                  (agent) => agent.name === selectedAgentName
+                );
+                if (agentIndex !== -1) {
+                  updatedAgentSet[agentIndex] = updatedAgent;
+                  setSelectedAgentConfigSet(updatedAgentSet);
+                  console.log("Agent updated in agent set");
+                }
+              }
+            }
+          }
+
+          // Manually update detected languages since we're setting a new language pair
+          setDetectedLanguage(sourceLang);
+          setSecondLanguage(targetLang);
+          console.log("Manually set detected languages:", sourceLang, targetLang);
+
+          // Step 6: Wait a moment to ensure everything is properly closed
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Step 7: Reconnect with new language settings
+          console.log("Reconnecting with new language settings");
+          // Force a complete reconnection
+          connectToRealtime();
+        } catch (error) {
+          console.error("Error during disconnect/reconnect process:", error);
+          // Attempt to recover by forcing reconnection
+          setSessionStatus("DISCONNECTED");
+          console.log("Attempting recovery by forcing reconnection");
+          connectToRealtime();
+        }
+      };
+
+      // Execute the disconnect/reconnect process
+      disconnectAndReconnect();
+    } else {
+      console.log("Not connected yet, language change will apply when connected");
+      
+      // Update the agent with new languages if available (for when connection is established)
       if (selectedAgentConfigSet && selectedAgentName) {
         const currentAgent = selectedAgentConfigSet.find(
           (a) => a.name === selectedAgentName
@@ -638,43 +847,50 @@ function App() {
             if (agentIndex !== -1) {
               updatedAgentSet[agentIndex] = updatedAgent;
               setSelectedAgentConfigSet(updatedAgentSet);
+              console.log("Agent updated in agent set");
             }
           }
         }
       }
 
-      // Send explicit update with the selected languages
-      updateSession(true);
+      // Manually update detected languages since we're setting a new language pair
+      setDetectedLanguage(sourceLang);
+      setSecondLanguage(targetLang);
+      console.log("Manually set detected languages:", sourceLang, targetLang);
 
-      // Notify the user about the language change
-      sendClientEvent({
-        type: "conversation.item.create",
-        item: {
-          type: "message",
-          // role: "assistant",
-          role: "system",
-          content: [
-            {
-              type: "text",
-              text: `Language pair updated: now ready to translate between ${getLanguageName(
-                sourceLang
-              )} and ${getLanguageName(targetLang)}.`,
-            },
-          ],
-        },
-      });
+      // Try to connect if not already connected
+      if (sessionStatus === "DISCONNECTED") {
+        console.log("Initiating connection for new language pair");
+        connectToRealtime();
+      }
     }
   };
 
+  // Add effect to reconnect after language change if disconnected
+  useEffect(() => {
+    if (languageChangeTimestamp > 0 && sessionStatus === "DISCONNECTED" && selectedSourceLanguage && selectedTargetLanguage) {
+      console.log("Language change detected and session is disconnected, triggering reconnection");
+      
+      // Add a small delay to ensure any cleanup is complete
+      const timer = setTimeout(() => {
+        console.log("Reconnecting after language change");
+        connectToRealtime();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [languageChangeTimestamp, sessionStatus, selectedSourceLanguage, selectedTargetLanguage]);
+
   // Update session when languages are detected or on initial connection
   useEffect(() => {
-    console.log("detectedLanguage", detectedLanguage);
-    console.log("secondLanguage", secondLanguage);
+    console.log("useEffect - detectedLanguage:", detectedLanguage, "secondLanguage:", secondLanguage, "sessionStatus:", sessionStatus);
     if (sessionStatus === "CONNECTED") {
       if (detectedLanguage) {
+        console.log("Setting detected language:", detectedLanguage);
         setDetectedLanguage(detectedLanguage);
       }
       if (secondLanguage) {
+        console.log("Setting second language:", secondLanguage);
         setSecondLanguage(secondLanguage);
       }
       if (detectedLanguage && secondLanguage) {
@@ -683,8 +899,8 @@ function App() {
           detectedLanguage,
           secondLanguage
         );
+        updateSession(true);
       }
-      updateSession(true);
     }
   }, [detectedLanguage, secondLanguage, sessionStatus]);
 
@@ -705,12 +921,19 @@ function App() {
   };
 
   const connectToRealtime = async () => {
-    if (sessionStatus !== "DISCONNECTED") return;
+    if (sessionStatus !== "DISCONNECTED") {
+      console.log("Cannot connect - session status is not DISCONNECTED:", sessionStatus);
+      return;
+    }
+    
+    console.log("Starting connection process...");
     setSessionStatus("CONNECTING");
 
     try {
       const EPHEMERAL_KEY = await fetchEphemeralKey();
       if (!EPHEMERAL_KEY) {
+        console.error("Failed to fetch ephemeral key");
+        setSessionStatus("DISCONNECTED");
         return;
       }
 
@@ -741,18 +964,22 @@ function App() {
 
       dc.addEventListener("open", () => {
         logClientEvent({}, "data_channel.open");
+        console.log("Data channel opened successfully");
       });
       dc.addEventListener("close", () => {
         logClientEvent({}, "data_channel.close");
+        console.log("Data channel closed");
       });
       dc.addEventListener("error", (err: any) => {
         logClientEvent({ error: err }, "data_channel.error");
+        console.error("Data channel error:", err);
       });
       dc.addEventListener("message", (e: MessageEvent) => {
         handleServerEventRef(JSON.parse(e.data));
       });
 
       setDataChannel(dc);
+      console.log("Connection established, data channel state:", dc.readyState);
     } catch (err) {
       console.error("Error connecting to realtime:", err);
       setSessionStatus("DISCONNECTED");
@@ -1192,7 +1419,7 @@ function App() {
   };
 
   const handleToggleRecording = () => {
-    console.log("handleToggleRecording called", { isRecording });
+    console.log("handleToggleRecording called", { isRecording, dataChannelState: dataChannel?.readyState });
     if (isRecording) {
       handleStopRecording();
     } else {
@@ -1705,7 +1932,13 @@ function App() {
                 
                 // Send clear buffer event
                 if (dcRef.current && dcRef.current.readyState === "open") {
+                  console.log("Sending clear audio buffer event - data channel state:", dcRef.current.readyState);
                   dcRef.current.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+                } else {
+                  console.error("Cannot send event - data channel not open", { 
+                    dcRef: dcRef.current ? "exists" : "null", 
+                    readyState: dcRef.current?.readyState 
+                  });
                 }
                 
                 // Update recording state
@@ -1713,9 +1946,10 @@ function App() {
                 buttonStateRef.current.wasRecordingStarted = true;
                 console.log("Recording started successfully");
               } else {
-                console.log("Cannot start recording - not connected", {
+                console.log("Cannot start recording - connection issue", {
                   sessionStatus,
                   dataChannelState: dataChannel?.readyState,
+                  dcRefState: dcRef.current?.readyState
                 });
               }
             }
@@ -1730,7 +1964,7 @@ function App() {
               console.log('Button released: Stopping recording');
               
               // Direct actions that don't rely on state updates
-              if (sessionStatus === "CONNECTED" && dataChannel?.readyState === "open") {
+              if (sessionStatus === "CONNECTED") {
                 // Disable the audio track directly
                 if (audioTrackRef.current) {
                   console.log("Disabling audio track");
@@ -1739,8 +1973,14 @@ function App() {
                 
                 // Send commit and response events
                 if (dcRef.current && dcRef.current.readyState === "open") {
+                  console.log("Sending commit and response events - data channel state:", dcRef.current.readyState);
                   dcRef.current.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
                   dcRef.current.send(JSON.stringify({ type: "response.create" }));
+                } else {
+                  console.error("Cannot send events - data channel not open", { 
+                    dcRef: dcRef.current ? "exists" : "null", 
+                    readyState: dcRef.current?.readyState 
+                  });
                 }
                 
                 // Update recording state
@@ -1748,9 +1988,10 @@ function App() {
                 buttonStateRef.current.wasRecordingStarted = false;
                 console.log("Recording stopped successfully");
               } else {
-                console.log("Cannot stop recording - connection lost", {
+                console.log("Cannot stop recording - connection issue", {
                   sessionStatus,
-                  dataChannelState: dataChannel?.readyState
+                  dataChannelState: dataChannel?.readyState,
+                  dcRefState: dcRef.current?.readyState
                 });
               }
             }
