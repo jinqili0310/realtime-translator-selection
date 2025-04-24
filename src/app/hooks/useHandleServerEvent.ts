@@ -215,7 +215,7 @@ export function useHandleServerEvent({
         input_audio_format: "pcm16",
         output_audio_format: "pcm16",
         input_audio_transcription: { 
-          model: "whisper-1",
+          model: "gpt-4o-mini-transcribe",
         },
         turn_detection: {
           type: "server_vad",
@@ -246,9 +246,9 @@ export function useHandleServerEvent({
       }
 
       case "conversation.item.input_audio_transcription.delta": {
-        console.log("serverEvent", serverEvent);
+        // console.log("serverEvent", serverEvent);
         const transcript = serverEvent.delta;
-        console.log("transcript", transcript);
+        // console.log("transcript", transcript);
 
         // Only process transcription when recording is active
         if (!isRecording || !transcript) {

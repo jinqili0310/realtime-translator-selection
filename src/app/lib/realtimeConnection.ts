@@ -2,7 +2,8 @@ import React from "react";
 
 export const createRealtimeConnection = async (
   EPHEMERAL_KEY: string,
-  audioElement: React.RefObject<HTMLAudioElement>
+  audioElement: React.RefObject<HTMLAudioElement>,
+  streamConfig?: MediaStreamConstraints
 ): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel; audioTrack: MediaStreamTrack }> => {
   const pc = new RTCPeerConnection();
 
@@ -14,11 +15,12 @@ export const createRealtimeConnection = async (
     }
   });
 
-  // Get user media but don't automatically start capturing audio
-  // The track will be enabled/disabled based on the recording state
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: true,
-  });
+  // Get user media with the provided constraints or default to audio:true
+  const stream = await navigator.mediaDevices.getUserMedia(
+    streamConfig || { audio: true }
+  );
+  
+  console.log("Created media stream with constraints:", streamConfig || { audio: true });
   const audioTrack = stream.getAudioTracks()[0];
   
   // Disable the audio track initially - it will be enabled when recording starts
@@ -38,10 +40,10 @@ export const createRealtimeConnection = async (
   // Model parameters for strict translation with no creativity
   const params = new URLSearchParams({
     model,
-    temperature: '0',
-    top_p: '1',
-    frequency_penalty: '0',
-    presence_penalty: '0',
+    // temperature: '0',
+    // top_p: '1',
+    // frequency_penalty: '0',
+    // presence_penalty: '0',
   });
 
   const sdpResponse = await fetch(`${baseUrl}?${params.toString()}`, {
